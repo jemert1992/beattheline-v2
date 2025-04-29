@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-gray-50 font-sans antialiased;
+}
+
+/* Define base styles for sections if needed, or rely on component classes */
+.nba-section {
+  /* Example: Add specific base styles for NBA section if needed */
+}
+
+.nhl-section {
+  /* Example: Add specific base styles for NHL section if needed */
+}
+
+.mlb-section {
+  /* Example: Add specific base styles for MLB section if needed */
+}
+
+/* Ensure table styles are consistent */
+table {
+  @apply min-w-full divide-y divide-gray-200;
+}
+
+thead {
+  @apply bg-gray-100;
+}
+
+th {
+  @apply px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-200;
+}
+
+tbody {
+  @apply bg-white divide-y divide-gray-200;
+}
+
+td {
+  @apply px-4 py-3 whitespace-nowrap text-sm text-gray-700 border border-gray-200;
+}
+
+/* Style for active/inactive tabs */
+.tab {
+  @apply px-4 py-2 font-medium rounded-t-lg cursor-pointer transition-colors duration-200 ease-in-out;
+}
+
+.tab-active {
+  @apply bg-white text-blue-600 border-b-2 border-blue-600;
+}
+
+.tab-inactive {
+  @apply text-gray-500 hover:text-gray-700 hover:bg-gray-100;
+}
+
