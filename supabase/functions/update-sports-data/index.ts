@@ -12,7 +12,10 @@ async function fetchAllPaginatedData(url: string, apiKey: string) {
   let page = 1;
 
   do {
-    const currentUrl = nextCursor ? `${url}?cursor=${nextCursor}&per_page=100` : `${url}?per_page=100`;
+    const separator = url.includes("?") ? "&" : "?";
+    const currentUrl = nextCursor
+      ? `${url}${separator}cursor=${nextCursor}&per_page=100`
+      : `${url}${separator}per_page=100`;
     console.log(`Fetching page ${page} from ${currentUrl.split("?")[0]}...`);
     const response = await fetch(currentUrl, {
       headers: {
