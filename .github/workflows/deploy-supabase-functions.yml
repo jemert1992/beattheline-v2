@@ -1,0 +1,32 @@
+name: Deploy Supabase Edge Functions
+
+on:
+  push:
+    branches:
+      - main # Or your default branch
+    paths:
+      - 'supabase/functions/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x # Use a specific version or v1.x for latest stable
+
+      - name: Set up Supabase CLI
+        run: npm install --save-dev supabase@latest
+
+      - name: Deploy Supabase Edge Functions
+        run: npx supabase functions deploy --project-ref $SUPABASE_PROJECT_ID --no-verify-jwt
+        working-directory: ./supabase # Adjust if your supabase folder is elsewhere
+
