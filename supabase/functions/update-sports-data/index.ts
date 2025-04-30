@@ -265,7 +265,7 @@ serve(async (req) => {
       console.log(`Fetched ${allMlbStandings.length} MLB team standings entries.`);
 
       // 3. Fetch MLB Player Season Stats (Requires GOAT tier)
-      const mlbPlayerStatsUrl = `${mlbBaseUrl}/season-stats?season=${currentSeason}`;
+      const mlbPlayerStatsUrl = `${mlbBaseUrl}/season_stats?season=${currentSeason}`;
       const allMlbPlayerStats = await fetchAllPaginatedData(mlbPlayerStatsUrl, balldontlieApiKey);
       console.log(`Fetched ${allMlbPlayerStats.length} MLB player season stats entries.`);
 
