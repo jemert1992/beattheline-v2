@@ -249,36 +249,6 @@ serve(async (req) => {
     
     console.log("--- Finished NHL Data Fetch ---");
 
-    // --- MLB Data Fetch Removed ---
-    // console.log("--- Starting MLB Data Fetch ---");
-    // Removed MLB section as balldontlie.io API does not support MLB data (returned 404).
-    // console.log("--- Finished MLB Data Fetch ---");
-
-    // --- TODO: Generate and store Predictions ---
-    console.log("--- Generating Predictions (TODO) ---");
-
-    // --- TODO: Generate and store Bets of the Day ---
-    console.log("--- Generating Bets of the Day (TODO) ---");
-
-    // Return original success response
-    return new Response(JSON.stringify({ message: "Sports data update process completed for NBA & NHL (partially)." }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
-    });
-
-  } catch (error) {
-    console.error("Function error:", error.message, error.stack);
-    return new Response(JSON.stringify({ error: error.message }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
-    });
-  }
-});
-
-console.log("update-sports-data function handler registered.");
-
-
-
     // --- Fetch MLB Data ---
     console.log("--- Starting MLB Data Fetch ---");
     const mlbBaseUrl = "https://mlb.balldontlie.io/mlb/v1";
@@ -408,4 +378,142 @@ console.log("update-sports-data function handler registered.");
       console.error("MLB data fetch error:", mlbError.message);
     }
     console.log("--- Finished MLB Data Fetch ---");
+
+    // --- TODO: Generate and store Predictions ---
+    console.log("--- Generating Predictions (TODO) ---");
+
+    // --- TODO: Generate and store Bets of the Day ---
+    console.log("--- Generating Bets of the Day (TODO) ---");
+
+    // Return success response including all sports attempted
+    return new Response(JSON.stringify({ message: "Sports data update process completed for NBA, NHL (partially), MLB, and EPL (placeholder)." }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 200,
+    });
+
+  } catch (error) {
+    console.error("Function error:", error.message, error.stack);
+    return new Response(JSON.stringify({ error: error.message }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500,
+    });
+  }
+});
+
+console.log("update-sports-data function handler registered.");
+
+
+
+    // --- Fetch EPL Data ---
+    console.log("--- Starting EPL Data Fetch ---");
+    // Assuming EPL API follows a similar pattern, adjust base URL if needed
+    const eplBaseUrl = "https://epl.balldontlie.io/epl/v1"; // Placeholder - Verify correct URL
+    try {
+      // 1. Fetch EPL Teams
+      const eplTeamsUrl = `${eplBaseUrl}/teams`;
+      const allEplTeams = await fetchAllPaginatedData(eplTeamsUrl, balldontlieApiKey);
+      console.log(`Fetched ${allEplTeams.length} EPL teams basic info.`);
+      const eplTeamMap = new Map(allEplTeams.map(team => [team.id, team]));
+
+      // 2. Fetch EPL Team Standings (Assuming endpoint exists and user has access)
+      // Using currentSeason (e.g., 2023) for consistency, adjust if needed
+      const eplStandingsUrl = `${eplBaseUrl}/team-standings?season=${currentSeason}`;
+      const allEplStandings = await fetchAllPaginatedData(eplStandingsUrl, balldontlieApiKey);
+      console.log(`Fetched ${allEplStandings.length} EPL team standings entries.`);
+
+      // 3. Process and Upsert EPL Team Stats
+      const eplTeamsToUpsert = allEplStandings.map((standing: any) => {
+        const teamInfo = eplTeamMap.get(standing.team_id);
+        return {
+          team_name: teamInfo ? `${teamInfo.display_name} (${teamInfo.abbreviation})` : `Unknown Team (${standing.team_id})`,
+          points: standing.points || 0,
+          goal_difference: standing.goal_difference || 0,
+          form: standing.form || 'N/A', // Assuming API provides 'form'
+        };
+      });
+
+      if (eplTeamsToUpsert.length > 0) {
+        console.log(`Upserting ${eplTeamsToUpsert.length} EPL teams stats...`);
+        // Use placeholder table name - user needs to confirm/create
+        const { error: eplTeamUpsertError } = await supabase
+          .from("epl_team_stats") 
+          .upsert(eplTeamsToUpsert, { onConflict: "team_name" });
+        if (eplTeamUpsertError) throw eplTeamUpsertError;
+        console.log("Successfully upserted EPL team stats.");
+      } else {
+        console.log("No EPL team stats to upsert.");
+      }
+
+      // 4. Fetch EPL Player Season Stats (Assuming endpoint exists and user has access)
+      const eplPlayerStatsUrl = `${eplBaseUrl}/player-season-stats?season=${currentSeason}`;
+      const allEplPlayerStats = await fetchAllPaginatedData(eplPlayerStatsUrl, balldontlieApiKey);
+      console.log(`Fetched ${allEplPlayerStats.length} EPL player season stats entries.`);
+
+      // 5. Process and Upsert EPL Player Props
+      const eplPlayerPropsToUpsert = [];
+      if (allEplPlayerStats.length > 0) {
+        console.log("Sample EPL Player Stat Data:", JSON.stringify(allEplPlayerStats[0], null, 2));
+        for (const stats of allEplPlayerStats) {
+          const playerName = `${stats.player.first_name} ${stats.player.last_name}`;
+          const teamAbbr = stats.team.abbreviation || 'N/A';
+          // Add Goals if available
+          if (stats.goals !== null && stats.goals !== undefined) {
+             eplPlayerPropsToUpsert.push({
+                player_name: playerName,
+                team: teamAbbr,
+                prop_type: 'Season Goals',
+                prop_value: stats.goals,
+                analysis: `${stats.goals} Goals in ${stats.games_played || 0} games`,
+                confidence: 3, // Placeholder confidence
+             });
+          }
+          // Add Assists if available
+          if (stats.assists !== null && stats.assists !== undefined) {
+             eplPlayerPropsToUpsert.push({
+                player_name: playerName,
+                team: teamAbbr,
+                prop_type: 'Season Assists',
+                prop_value: stats.assists,
+                analysis: `${stats.assists} Assists in ${stats.games_played || 0} games`,
+                confidence: 3, // Placeholder confidence
+             });
+          }
+          // Add Clean Sheets (Goalkeepers) if available
+          if (stats.clean_sheets !== null && stats.clean_sheets !== undefined) {
+             eplPlayerPropsToUpsert.push({
+                player_name: playerName,
+                team: teamAbbr,
+                prop_type: 'Season Clean Sheets',
+                prop_value: stats.clean_sheets,
+                analysis: `${stats.clean_sheets} Clean Sheets in ${stats.games_played || 0} games`,
+                confidence: 3, // Placeholder confidence
+             });
+          }
+        }
+      }
+
+      if (eplPlayerPropsToUpsert.length > 0) {
+        console.log(`Upserting ${eplPlayerPropsToUpsert.length} EPL player props...`);
+        // Use placeholder table name - user needs to confirm/create
+        const chunkSize = 500;
+        for (let i = 0; i < eplPlayerPropsToUpsert.length; i += chunkSize) {
+            const chunk = eplPlayerPropsToUpsert.slice(i, i + chunkSize);
+            console.log(`Upserting EPL player props chunk ${i / chunkSize + 1}...`);
+            const { error: eplPlayerUpsertError } = await supabase
+              .from("epl_player_props") 
+              .upsert(chunk, { onConflict: "player_name, prop_type" });
+            if (eplPlayerUpsertError) throw eplPlayerUpsertError;
+        }
+        console.log("Successfully upserted EPL player props.");
+      } else {
+        console.log("No EPL player props to upsert.");
+      }
+
+    } catch (eplError) {
+      console.error("EPL data fetch error:", eplError.message);
+      // Don't throw error, just log it, so other sports can continue
+    }
+    console.log("--- Finished EPL Data Fetch ---");
+
+    // --- TODO: Generate and store Predictions ---
 
