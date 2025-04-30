@@ -64,7 +64,7 @@ serve(async (req) => {
     const balldontlieApiKey = "9047df76-eb37-4f81-8586-f7ae336027dc"; // Use the provided API key
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const currentSeason = 2023; // TODO: Make this dynamic or configurable
+    const currentSeason = 2023; // Use 2023 for NBA/MLB/EPL as per docs/errors
 
     if (!supabaseUrl || !supabaseServiceRoleKey) {
       throw new Error("Supabase environment variables not set.");
@@ -259,20 +259,20 @@ serve(async (req) => {
       console.log(`Fetched ${allMlbTeams.length} MLB teams basic info.`);
       const mlbTeamMap = new Map(allMlbTeams.map(team => [team.id, team]));
 
-      // 2. Fetch MLB Team Season Stats (Requires GOAT tier - user has ALL-ACCESS)
-      // Using currentSeason (e.g., 2023) for consistency, adjust if needed
-      const mlbTeamStatsUrl = `${mlbBaseUrl}/team-standings?season=${currentSeason}`;
-      const allMlbTeamStats = await fetchAllPaginatedData(mlbTeamStatsUrl, balldontlieApiKey);
-      console.log(`Fetched ${allMlbTeamStats.length} MLB team season stats entries.`);
+      // 2. Fetch MLB Team Standings (Requires ALL-STAR tier)
+      const mlbStandingsUrl = `${mlbBaseUrl}/standings?season=2023`; // Use 2023 season
+      const allMlbStandings = await fetchAllPaginatedData(mlbStandingsUrl, balldontlieApiKey);
+      console.log(`Fetched ${allMlbStandings.length} MLB team standings entries.`);
 
-      // 3. Process and Upsert MLB Team Stats
-      const mlbTeamsToUpsert = allMlbTeamStats.map((stats: any) => {
-        const teamInfo = mlbTeamMap.get(stats.team_id);
+      // 3. Process and Upsert MLB Team Stats from Standings
+      const mlbTeamsToUpsert = allMlbStandings.map((standing: any) => {
+        const teamInfo = mlbTeamMap.get(standing.team_id);
         return {
-          team_name: teamInfo ? `${teamInfo.display_name} (${teamInfo.abbreviation})` : `Unknown Team (${stats.team_id})`,
-          win_loss_record: `${stats.wins || 0}-${stats.losses || 0}`,
-          era: stats.era || null, // Assuming API provides 'era'
-          batting_average: stats.avg || null, // Assuming API provides 'avg' for batting average
+          team_name: teamInfo ? `${teamInfo.display_name} (${teamInfo.abbreviation})` : `Unknown Team (${standing.team_id})`,
+          win_loss_record: `${standing.wins || 0}-${standing.losses || 0}`,
+          // Standings endpoint might not have ERA/AVG, set to null or fetch separately if needed
+          era: null, 
+          batting_average: null, 
         };
       });
 
