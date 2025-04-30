@@ -290,12 +290,26 @@ serve(async (req) => {
       const teamAggregatedStats = new Map();
       // Check if allMlbPlayerStats exists and is an array
       if (allMlbPlayerStats && Array.isArray(allMlbPlayerStats)) {
+          console.log("Starting MLB player stats aggregation..."); // DIAGNOSTIC LOG
+          let processedCount = 0; // DIAGNOSTIC LOG
           for (const stats of allMlbPlayerStats) {
+            processedCount++; // DIAGNOSTIC LOG
+            // DIAGNOSTIC LOG: Log team object and ID from player stats
+            console.log(`[MLB Aggregation] Processing player ${processedCount}/${allMlbPlayerStats.length}: ${stats.player?.first_name} ${stats.player?.last_name}`);
+            console.log(`[MLB Aggregation] Team Object: ${JSON.stringify(stats.team)}`);
+            console.log(`[MLB Aggregation] Found team ID: ${stats.team?.id}, Type: ${typeof stats.team?.id}`);
+            
             // Safely access team id
-            if (!stats?.team?.id) continue; // Skip players without a team ID
+            if (!stats?.team?.id) {
+                console.log("[MLB Aggregation] Skipping player due to missing team ID."); // DIAGNOSTIC LOG
+                continue; // Skip players without a team ID
+            }
 
             const teamId = stats.team.id;
+            console.log(`[MLB Aggregation] Using teamId: ${teamId}`); // DIAGNOSTIC LOG
+            
             if (!teamAggregatedStats.has(teamId)) {
+              console.log(`[MLB Aggregation] Initializing aggregated stats for teamId: ${teamId}`); // DIAGNOSTIC LOG
               teamAggregatedStats.set(teamId, {
                 total_hits: 0,
                 total_at_bats: 0,
@@ -319,6 +333,7 @@ serve(async (req) => {
                 teamStats.total_innings_pitched += inningsPitched;
             }
           }
+          console.log("Finished MLB player stats aggregation loop."); // DIAGNOSTIC LOG
       } else {
           console.warn("No valid MLB player stats data found for aggregation.");
       }
@@ -330,13 +345,27 @@ serve(async (req) => {
       const finalMlbTeamsToUpsertMap = new Map();
       // Check if allMlbStandings exists and is an array
       if (allMlbStandings && Array.isArray(allMlbStandings)) {
+          console.log("Starting MLB standings combination..."); // DIAGNOSTIC LOG
           for (const standing of allMlbStandings) {
+            // DIAGNOSTIC LOG: Log team ID from standings
+            console.log(`[MLB Combine] Processing standing for team_id: ${standing.team_id}, Type: ${typeof standing.team_id}`);
+            
             const teamInfo = mlbTeamMap.get(standing.team_id);
             // Safely access team info and properties
-            if (!teamInfo) continue; // Skip if we don't have basic info for the team
+            if (!teamInfo) {
+                console.log(`[MLB Combine] Skipping standing for team_id ${standing.team_id} - teamInfo not found in mlbTeamMap.`); // DIAGNOSTIC LOG
+                continue; // Skip if we don't have basic info for the team
+            }
 
             const teamName = `${teamInfo.display_name ?? 'Unknown'} (${teamInfo.abbreviation ?? 'N/A'})`;
             const aggregated = teamAggregatedStats.get(standing.team_id);
+            
+            // DIAGNOSTIC LOG: Log if aggregated stats were found for this team ID
+            if (aggregated) {
+                console.log(`[MLB Combine] Found aggregated stats for team_id ${standing.team_id}: ${JSON.stringify(aggregated)}`);
+            } else {
+                console.log(`[MLB Combine] No aggregated stats found for team_id ${standing.team_id}. ERA/AVG will be null.`);
+            }
 
             let teamBattingAverage = null;
             if (aggregated && aggregated.total_at_bats > 0) {
@@ -349,6 +378,7 @@ serve(async (req) => {
             }
 
             // Use teamName as the key to ensure uniqueness
+            console.log(`[MLB Combine] Setting final data for team: ${teamName}`); // DIAGNOSTIC LOG
             finalMlbTeamsToUpsertMap.set(teamName, {
               team_name: teamName,
               win_loss_record: `${standing.wins ?? 0}-${standing.losses ?? 0}`,
@@ -356,6 +386,7 @@ serve(async (req) => {
               era: teamEra !== null ? parseFloat(teamEra.toFixed(2)) : null,
             });
           }
+          console.log("Finished MLB standings combination loop."); // DIAGNOSTIC LOG
       } else {
           console.warn("No valid MLB standings data found for processing.");
       }
