@@ -301,10 +301,7 @@ serve(async (req) => {
       }
       console.log(`Aggregated stats for ${teamAggregatedStats.size} MLB teams.`);
 
-      // 5. Fetch MLB Team Standings (Requires ALL-STAR tier)
-      const mlbStandingsUrl = `${mlbBaseUrl}/standings?season=2023`; // Use 2023 season
-      const allMlbStandings = await fetchAllPaginatedData(mlbStandingsUrl, balldontlieApiKey);
-      console.log(`Fetched ${allMlbStandings.length} MLB team standings entries.`);
+      // 5. Data already fetched in step 2
 
       // 6. Combine Standings and Aggregated Stats, Ensure Uniqueness
       const finalMlbTeamsToUpsertMap = new Map();
