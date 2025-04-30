@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 
-console.log("Initializing update-sports-data function (v28 Diagnostic)");
+console.log("Initializing update-sports-data function (v29 Final)");
 
 // --- Helper Function to fetch paginated data ---
 async function fetchAllPaginatedData(url: string, apiKey: string) {
@@ -253,8 +253,8 @@ serve(async (req) => {
     }
     console.log("--- Finished NHL Data Fetch ---");
 
-    // --- Fetch MLB Data (v28 Diagnostic) ---
-    console.log("--- Starting MLB Data Fetch (v28 Diagnostic) ---");
+    // --- Fetch MLB Data (v29 Final) ---
+    console.log("--- Starting MLB Data Fetch (v29 Final) ---");
     const mlbBaseUrl = "https://api.balldontlie.io/mlb/v1";
     try {
       // 1. Fetch MLB Teams (Definitive List) - Key by ABBREVIATION
@@ -272,32 +272,21 @@ serve(async (req) => {
       });
       console.log(`Created MLB team map with ${mlbTeamMap.size} entries keyed by abbreviation.`);
 
-      // 2. Fetch MLB Team Standings - Add DIAGNOSTIC LOGGING
+      // 2. Fetch MLB Team Standings - FIX MAPPING
       const mlbStandingsUrl = `${mlbBaseUrl}/standings?season=${currentSeason}`;
       const allMlbStandings = await fetchAllPaginatedData(mlbStandingsUrl, balldontlieApiKey);
       console.log(`Fetched ${allMlbStandings.length} MLB team standings entries.`);
       
-      // --- DIAGNOSTIC LOGGING FOR STANDINGS STRUCTURE ---
-      if (allMlbStandings && allMlbStandings.length > 0) {
-          console.log("--- [MLB DIAGNOSTIC] First Standing Object Structure ---");
-          console.log(JSON.stringify(allMlbStandings[0], null, 2));
-          console.log("-------------------------------------------------------");
-      } else {
-          console.log("--- [MLB DIAGNOSTIC] No standings data received. ---");
-      }
-      // --- END DIAGNOSTIC LOGGING ---
-
-      // Create a map for quick lookup of standings by ABBREVIATION (Attempt based on v27 logic, may fail)
+      // Create a map for quick lookup of standings by ABBREVIATION - Use correct path
       const mlbStandingsMap = new Map();
       allMlbStandings.forEach(standing => {
-          // Find the corresponding team abbreviation from the /teams data using team_id (This is the part that failed in v27)
-          const teamInfo = allMlbTeams.find(t => t.id === standing.team_id); // Expecting standing.team_id to exist
-          const abbreviation = teamInfo?.abbreviation?.trim().toUpperCase();
+          // FIX: Use standing.team.abbreviation directly
+          const abbreviation = standing.team?.abbreviation?.trim().toUpperCase(); 
           if (abbreviation) {
               mlbStandingsMap.set(abbreviation, standing);
           } else {
-              // Log the problematic standing object if mapping fails
-              console.warn(`MLB Standing could not be mapped to an abbreviation. Standing object: ${JSON.stringify(standing)}`);
+              // Log if abbreviation is missing in the standing object itself
+              console.warn(`MLB Standing object missing team abbreviation. Standing object: ${JSON.stringify(standing)}`);
           }
       });
        console.log(`Created MLB standings map with ${mlbStandingsMap.size} entries keyed by abbreviation.`);
@@ -337,12 +326,12 @@ serve(async (req) => {
       }
       console.log(`Aggregated stats for ${teamAggregatedStats.size} MLB teams keyed by abbreviation.`);
 
-      // 5. Combine Team Info, Standings, and Aggregated Stats - FIX SCHEMA MISMATCH
+      // 5. Combine Team Info, Standings, and Aggregated Stats
       const finalMlbTeamsToUpsert = [];
       console.log("Starting MLB team data combination (iterating over unique abbreviations)...");
       for (const teamAbbreviation of mlbTeamMap.keys()) {
           const teamInfo = mlbTeamMap.get(teamAbbreviation);
-          const standing = mlbStandingsMap.get(teamAbbreviation);
+          const standing = mlbStandingsMap.get(teamAbbreviation); // Should now find correct standing
           const aggregated = teamAggregatedStats.get(teamAbbreviation);
 
           if (!teamInfo) continue; 
@@ -360,16 +349,14 @@ serve(async (req) => {
               }
           }
           
-          // FIX: Use win_loss_record column
+          // Use win_loss_record column
           const wins = standing?.wins ?? 0;
           const losses = standing?.losses ?? 0;
           const winLossRecord = `${wins}-${losses}`; 
 
           const teamData = {
               team_name: teamName,
-              // wins: wins, // Removed
-              // losses: losses, // Removed
-              win_loss_record: winLossRecord, // Added
+              win_loss_record: winLossRecord, 
               era: era,
               batting_average: batting_average,
               // Add other columns from user input if needed, ensure they exist in the table
@@ -387,14 +374,13 @@ serve(async (req) => {
         const { error: mlbTeamUpsertError } = await supabase
           .from("mlb_team_stats")
           .upsert(finalMlbTeamsToUpsert, { onConflict: "team_name" });
-        // Check specifically for schema mismatch errors if possible
         if (mlbTeamUpsertError) {
             console.error("MLB Team Upsert Error Details:", JSON.stringify(mlbTeamUpsertError));
             throw mlbTeamUpsertError;
         }
         console.log("Successfully upserted MLB team data.");
       } else {
-        console.log("No combined MLB team stats to upsert (check standings mapping)." );
+        console.log("No combined MLB team stats to upsert." );
       }
 
       // 7. Process and Prepare MLB Player Props using a Map for uniqueness
@@ -477,10 +463,12 @@ serve(async (req) => {
         console.log(`Fetched ${allEplStandings.length} EPL standings entries.`);
         const eplStandingsMap = new Map();
         allEplStandings.forEach(standing => {
-            const teamInfo = allEplTeams.find(t => t.id === standing.team_id);
-            const abbreviation = teamInfo?.abbreviation?.trim().toUpperCase();
+            // FIX: Use standing.team.abbreviation directly if EPL API follows same structure
+            const abbreviation = standing.team?.abbreviation?.trim().toUpperCase();
             if (abbreviation) {
                 eplStandingsMap.set(abbreviation, standing);
+            } else {
+                 console.warn(`EPL Standing object missing team abbreviation. Standing object: ${JSON.stringify(standing)}`);
             }
         });
         console.log(`Created EPL standings map with ${eplStandingsMap.size} entries.`);
