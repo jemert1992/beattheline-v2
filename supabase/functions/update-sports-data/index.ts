@@ -290,26 +290,37 @@ serve(async (req) => {
       const teamAggregatedStats = new Map();
       // Check if allMlbPlayerStats exists and is an array
       if (allMlbPlayerStats && Array.isArray(allMlbPlayerStats)) {
-          console.log("Starting MLB player stats aggregation..."); // DIAGNOSTIC LOG
-          let processedCount = 0; // DIAGNOSTIC LOG
+          console.log("Starting MLB player stats aggregation..."); 
+          let processedCount = 0; 
+          let loggedFirstPlayer = false; // Flag to log only the first player's structure
           for (const stats of allMlbPlayerStats) {
-            processedCount++; // DIAGNOSTIC LOG
-            // DIAGNOSTIC LOG: Log team object and ID from player stats
+            processedCount++; 
+            
+            // DIAGNOSTIC LOG: Log the *entire structure* of the first player stat object
+            if (!loggedFirstPlayer) {
+                console.log("--- [MLB DIAGNOSTIC] First Player Stat Object Structure ---");
+                console.log(JSON.stringify(stats, null, 2));
+                console.log("--- End First Player Stat Object Structure ---");
+                loggedFirstPlayer = true;
+            }
+
+            // *** Placeholder for actual team ID logic - we need to find it first ***
+            // const teamId = stats.team?.id; // This is incorrect based on v23 logs
+            const teamId = stats.team_id; // HYPOTHESIS: Maybe it's stats.team_id?
             console.log(`[MLB Aggregation] Processing player ${processedCount}/${allMlbPlayerStats.length}: ${stats.player?.first_name} ${stats.player?.last_name}`);
-            console.log(`[MLB Aggregation] Team Object: ${JSON.stringify(stats.team)}`);
-            console.log(`[MLB Aggregation] Found team ID: ${stats.team?.id}, Type: ${typeof stats.team?.id}`);
+            console.log(`[MLB Aggregation] Attempting to use team ID: ${teamId}, Type: ${typeof teamId}`);
             
             // Safely access team id
-            if (!stats?.team?.id) {
-                console.log("[MLB Aggregation] Skipping player due to missing team ID."); // DIAGNOSTIC LOG
+            if (!teamId) {
+                console.log("[MLB Aggregation] Skipping player due to missing team ID."); 
                 continue; // Skip players without a team ID
             }
 
-            const teamId = stats.team.id;
-            console.log(`[MLB Aggregation] Using teamId: ${teamId}`); // DIAGNOSTIC LOG
+            // const teamId = stats.team.id; // Original incorrect line
+            console.log(`[MLB Aggregation] Using teamId: ${teamId}`); 
             
             if (!teamAggregatedStats.has(teamId)) {
-              console.log(`[MLB Aggregation] Initializing aggregated stats for teamId: ${teamId}`); // DIAGNOSTIC LOG
+              console.log(`[MLB Aggregation] Initializing aggregated stats for teamId: ${teamId}`); 
               teamAggregatedStats.set(teamId, {
                 total_hits: 0,
                 total_at_bats: 0,
@@ -333,7 +344,7 @@ serve(async (req) => {
                 teamStats.total_innings_pitched += inningsPitched;
             }
           }
-          console.log("Finished MLB player stats aggregation loop."); // DIAGNOSTIC LOG
+          console.log("Finished MLB player stats aggregation loop."); 
       } else {
           console.warn("No valid MLB player stats data found for aggregation.");
       }
@@ -345,22 +356,19 @@ serve(async (req) => {
       const finalMlbTeamsToUpsertMap = new Map();
       // Check if allMlbStandings exists and is an array
       if (allMlbStandings && Array.isArray(allMlbStandings)) {
-          console.log("Starting MLB standings combination..."); // DIAGNOSTIC LOG
+          console.log("Starting MLB standings combination..."); 
           for (const standing of allMlbStandings) {
-            // DIAGNOSTIC LOG: Log team ID from standings
             console.log(`[MLB Combine] Processing standing for team_id: ${standing.team_id}, Type: ${typeof standing.team_id}`);
             
             const teamInfo = mlbTeamMap.get(standing.team_id);
-            // Safely access team info and properties
             if (!teamInfo) {
-                console.log(`[MLB Combine] Skipping standing for team_id ${standing.team_id} - teamInfo not found in mlbTeamMap.`); // DIAGNOSTIC LOG
-                continue; // Skip if we don't have basic info for the team
+                console.log(`[MLB Combine] Skipping standing for team_id ${standing.team_id} - teamInfo not found in mlbTeamMap.`); 
+                continue; 
             }
 
             const teamName = `${teamInfo.display_name ?? 'Unknown'} (${teamInfo.abbreviation ?? 'N/A'})`;
             const aggregated = teamAggregatedStats.get(standing.team_id);
             
-            // DIAGNOSTIC LOG: Log if aggregated stats were found for this team ID
             if (aggregated) {
                 console.log(`[MLB Combine] Found aggregated stats for team_id ${standing.team_id}: ${JSON.stringify(aggregated)}`);
             } else {
@@ -377,8 +385,7 @@ serve(async (req) => {
               teamEra = (aggregated.total_earned_runs / aggregated.total_innings_pitched) * 9;
             }
 
-            // Use teamName as the key to ensure uniqueness
-            console.log(`[MLB Combine] Setting final data for team: ${teamName}`); // DIAGNOSTIC LOG
+            console.log(`[MLB Combine] Setting final data for team: ${teamName}`); 
             finalMlbTeamsToUpsertMap.set(teamName, {
               team_name: teamName,
               win_loss_record: `${standing.wins ?? 0}-${standing.losses ?? 0}`,
@@ -386,7 +393,7 @@ serve(async (req) => {
               era: teamEra !== null ? parseFloat(teamEra.toFixed(2)) : null,
             });
           }
-          console.log("Finished MLB standings combination loop."); // DIAGNOSTIC LOG
+          console.log("Finished MLB standings combination loop."); 
       } else {
           console.warn("No valid MLB standings data found for processing.");
       }
@@ -409,7 +416,7 @@ serve(async (req) => {
       const mlbPlayerPropsToUpsert = [];
       // Add check for allMlbPlayerStats existence and length
       if (allMlbPlayerStats && allMlbPlayerStats.length > 0) {
-        console.log("Sample MLB Player Stat Data:", JSON.stringify(allMlbPlayerStats[0], null, 2));
+        console.log("Sample MLB Player Stat Data (v24):", JSON.stringify(allMlbPlayerStats[0], null, 2)); // Log first player again for structure check
         for (const stats of allMlbPlayerStats) {
           // Defensive check: Ensure stats and stats.player exist before accessing properties
           if (!stats || !stats.player) {
@@ -419,8 +426,12 @@ serve(async (req) => {
 
           // Safely access player name parts using nullish coalescing
           const playerName = `${stats.player.first_name ?? 'Unknown'} ${stats.player.last_name ?? 'Player'}`;
-          // Safely access team abbreviation using optional chaining and nullish coalescing
-          const teamAbbr = stats.team?.abbreviation ?? 'N/A';
+          
+          // *** Placeholder for actual team abbreviation logic - depends on where team ID is found ***
+          // const teamAbbr = stats.team?.abbreviation ?? 'N/A'; // Incorrect
+          const teamIdForAbbr = stats.team_id; // HYPOTHESIS: Use the same ID as aggregation
+          const teamInfoForAbbr = teamIdForAbbr ? mlbTeamMap.get(teamIdForAbbr) : null;
+          const teamAbbr = teamInfoForAbbr?.abbreviation ?? 'N/A';
 
           // Use nullish coalescing for games played/pitched in analysis strings
           const gamesPlayedOrPitched = stats.games_pitched ?? stats.games_played ?? 0;
