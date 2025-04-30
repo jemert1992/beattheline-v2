@@ -3,15 +3,28 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 
-console.log("Initializing update-sports-data function (v30 EPL Diagnostic)");
+console.log("Initializing update-sports-data function (v31 EPL Fix)");
 
 // --- Helper Function to fetch paginated data ---
 async function fetchAllPaginatedData(url: string, apiKey: string) {
+  // --- [v31] Add check for undefined URL ---
+  if (typeof url !== 'string' || !url) {
+    console.error(`[fetchAllPaginatedData] Received invalid URL: ${url}`);
+    throw new Error(`[fetchAllPaginatedData] Attempted to fetch with an invalid URL.`);
+  }
+  // --- End [v31] check ---
+
   let allData: any[] = [];
   let nextCursor: string | null = null;
   let page = 1;
 
   do {
+    // --- [v31] Check url again before includes, though the check above should prevent this ---
+    if (typeof url !== 'string') {
+        console.error(`[fetchAllPaginatedData] URL became invalid within loop: ${url}`);
+        throw new Error(`[fetchAllPaginatedData] URL became invalid within loop.`);
+    }
+    // --- End [v31] check ---
     const separator = url.includes("?") ? "&" : "?";
     const currentUrl = nextCursor
       ? `${url}${separator}cursor=${nextCursor}&per_page=100`
@@ -300,154 +313,136 @@ serve(async (req) => {
     } catch (mlbError) { console.error("MLB data fetch/process error:", mlbError.message); }
     console.log("--- Finished MLB Data Fetch ---");
 
-    // --- Fetch EPL Data (v30 Diagnostic) ---
-    console.log("--- Starting EPL Data Fetch (v30 Diagnostic) ---");
+    // --- Fetch EPL Data (v31 Fix) ---
+    console.log("--- Starting EPL Data Fetch (v31 Fix) ---");
     const eplBaseUrl = "https://api.balldontlie.io/epl/v1"; 
-    let allEplTeams = []; // Initialize empty array
-    let eplFetchMethod = "None"; // Track which method succeeded
+    let allEplTeams = [];
+    let allEplStandings = [];
+    let allEplPlayerStats = [];
 
     try {
-        // --- DIAGNOSTIC ATTEMPTS FOR /teams ---
-        console.log("--- [EPL DIAGNOSTIC] Attempting to fetch /teams (no params) ---");
-        try {
-            const response = await fetch(`${eplBaseUrl}/teams`, { headers: { "Authorization": balldontlieApiKey } });
-            if (!response.ok) {
-                throw new Error(`Status ${response.status}: ${await response.text()}`);
-            }
-            const data = await response.json();
-            // Check if data.data exists and is an array
-            if (Array.isArray(data?.data)) {
-                allEplTeams = data.data; // Assuming non-paginated or just first page is enough for diagnostic
-                eplFetchMethod = "No Params";
-                console.log(`--- [EPL DIAGNOSTIC] Success fetching /teams (no params). Found ${allEplTeams.length} teams.`);
+        // 1. Fetch EPL Teams - Revert to fetchAllPaginatedData, use abbr
+        const eplTeamsUrl = `${eplBaseUrl}/teams`;
+        console.log(`Attempting to fetch EPL teams from: ${eplTeamsUrl}`);
+        allEplTeams = await fetchAllPaginatedData(eplTeamsUrl, balldontlieApiKey);
+        console.log(`Fetched ${allEplTeams.length} EPL teams.`);
+        const eplTeamMap = new Map();
+        allEplTeams.forEach(team => {
+            // FIX: Use team.abbr
+            const abbreviation = team.abbr?.trim().toUpperCase(); 
+            if (abbreviation) {
+                eplTeamMap.set(abbreviation, team);
             } else {
-                 console.log(`--- [EPL DIAGNOSTIC] Fetch /teams (no params) OK, but response format unexpected: ${JSON.stringify(data)}`);
-                 throw new Error("Unexpected response format");
+                console.warn(`EPL Team missing abbreviation. Team object: ${JSON.stringify(team)}`);
             }
-        } catch (error) {
-            console.warn(`--- [EPL DIAGNOSTIC] Failed fetching /teams (no params): ${error.message}`);
-        }
+        });
+        console.log(`Created EPL team map with ${eplTeamMap.size} entries.`);
 
-        // Only try next method if the previous one failed
-        if (eplFetchMethod === "None") {
-            console.log("--- [EPL DIAGNOSTIC] Attempting to fetch /teams?season=2023 ---");
-            try {
-                const response = await fetch(`${eplBaseUrl}/teams?season=2023`, { headers: { "Authorization": balldontlieApiKey } });
-                if (!response.ok) {
-                    throw new Error(`Status ${response.status}: ${await response.text()}`);
-                }
-                const data = await response.json();
-                 if (Array.isArray(data?.data)) {
-                    allEplTeams = data.data;
-                    eplFetchMethod = "Season 2023";
-                    console.log(`--- [EPL DIAGNOSTIC] Success fetching /teams?season=2023. Found ${allEplTeams.length} teams.`);
-                 } else {
-                    console.log(`--- [EPL DIAGNOSTIC] Fetch /teams?season=2023 OK, but response format unexpected: ${JSON.stringify(data)}`);
-                    throw new Error("Unexpected response format");
-                 }
-            } catch (error) {
-                console.warn(`--- [EPL DIAGNOSTIC] Failed fetching /teams?season=2023: ${error.message}`);
+        // 2. Fetch EPL Standings - Use abbr
+        const eplStandingsUrl = `${eplBaseUrl}/standings?season=${eplSeason}`;
+        console.log(`Attempting to fetch EPL standings from: ${eplStandingsUrl}`);
+        // [v31] Add check before fetch
+        if (typeof eplStandingsUrl !== 'string' || !eplStandingsUrl) {
+             throw new Error(`Invalid EPL Standings URL generated: ${eplStandingsUrl}`);
+        }
+        allEplStandings = await fetchAllPaginatedData(eplStandingsUrl, balldontlieApiKey);
+        console.log(`Fetched ${allEplStandings.length} EPL standings entries.`);
+        const eplStandingsMap = new Map();
+        allEplStandings.forEach(standing => {
+            // FIX: Use standing.team.abbr
+            const abbreviation = standing.team?.abbr?.trim().toUpperCase();
+            if (abbreviation) {
+                eplStandingsMap.set(abbreviation, standing);
+            } else {
+                 console.warn(`EPL Standing object missing team abbreviation (abbr). Standing object: ${JSON.stringify(standing)}`);
             }
-        }
+        });
+        console.log(`Created EPL standings map with ${eplStandingsMap.size} entries.`);
 
-        if (eplFetchMethod === "None") {
-            console.log("--- [EPL DIAGNOSTIC] Attempting to fetch /teams?season=2024 ---");
-            try {
-                const response = await fetch(`${eplBaseUrl}/teams?season=2024`, { headers: { "Authorization": balldontlieApiKey } });
-                if (!response.ok) {
-                    throw new Error(`Status ${response.status}: ${await response.text()}`);
-                }
-                 const data = await response.json();
-                 if (Array.isArray(data?.data)) {
-                    allEplTeams = data.data;
-                    eplFetchMethod = "Season 2024";
-                    console.log(`--- [EPL DIAGNOSTIC] Success fetching /teams?season=2024. Found ${allEplTeams.length} teams.`);
-                 } else {
-                    console.log(`--- [EPL DIAGNOSTIC] Fetch /teams?season=2024 OK, but response format unexpected: ${JSON.stringify(data)}`);
-                    throw new Error("Unexpected response format");
-                 }
-            } catch (error) {
-                console.warn(`--- [EPL DIAGNOSTIC] Failed fetching /teams?season=2024: ${error.message}`);
-            }
-        }
-        // --- END DIAGNOSTIC ATTEMPTS ---
-
-        if (eplFetchMethod === "None") {
-            console.error("--- [EPL DIAGNOSTIC] All attempts to fetch EPL teams failed. Cannot proceed with EPL data.");
-            // Skip the rest of the EPL processing
-        } else {
-            console.log(`Successfully fetched ${allEplTeams.length} EPL teams using method: ${eplFetchMethod}.`);
-            const eplTeamMap = new Map(allEplTeams.map(team => [team.abbreviation?.trim().toUpperCase(), team]));
-            console.log(`Created EPL team map with ${eplTeamMap.size} entries.`);
-
-            // Continue with standings and player stats fetch (using eplSeason = 2024 for now)
-            // Note: These might also fail if the season parameter is wrong for them too.
-            const eplStandingsUrl = `${eplBaseUrl}/standings?season=${eplSeason}`;
-            const allEplStandings = await fetchAllPaginatedData(eplStandingsUrl, balldontlieApiKey);
-            console.log(`Fetched ${allEplStandings.length} EPL standings entries.`);
-            const eplStandingsMap = new Map();
-            allEplStandings.forEach(standing => {
-                const abbreviation = standing.team?.abbreviation?.trim().toUpperCase();
-                if (abbreviation) { eplStandingsMap.set(abbreviation, standing); } 
-                else { console.warn(`EPL Standing object missing team abbreviation. Standing object: ${JSON.stringify(standing)}`); }
+        // 3. Upsert EPL Team Stats (Using placeholder table names)
+        const eplTeamsToUpsert = [];
+        for (const teamAbbreviation of eplTeamMap.keys()) {
+            const teamInfo = eplTeamMap.get(teamAbbreviation);
+            const standing = eplStandingsMap.get(teamAbbreviation);
+            if (!teamInfo) continue;
+            // FIX: Use teamInfo.abbr
+            eplTeamsToUpsert.push({
+                team_name: `${teamInfo.name ?? 'Unknown'} (${teamInfo.abbr ?? 'N/A'})`, 
+                wins: standing?.wins ?? 0, losses: standing?.losses ?? 0,
+                goals_for: standing?.goals_for ?? 0, goals_against: standing?.goals_against ?? 0,
+                points: standing?.points ?? 0,
             });
-            console.log(`Created EPL standings map with ${eplStandingsMap.size} entries.`);
+        }
+        if (eplTeamsToUpsert.length > 0) {
+            console.log(`Upserting ${eplTeamsToUpsert.length} EPL teams to placeholder table...`);
+            const { error: eplTeamError } = await supabase
+                .from("epl_team_stats") // Placeholder table name
+                .upsert(eplTeamsToUpsert, { onConflict: "team_name" });
+            if (eplTeamError) throw eplTeamError;
+            console.log("Successfully upserted EPL team data (placeholder)." );
+        } else {
+            console.log("No EPL team data to upsert.");
+        }
 
-            const eplTeamsToUpsert = [];
-            for (const teamAbbreviation of eplTeamMap.keys()) {
-                const teamInfo = eplTeamMap.get(teamAbbreviation); const standing = eplStandingsMap.get(teamAbbreviation);
-                if (!teamInfo) continue;
-                eplTeamsToUpsert.push({
-                    team_name: `${teamInfo.display_name ?? 'Unknown'} (${teamInfo.abbreviation ?? 'N/A'})`,
-                    wins: standing?.wins ?? 0, losses: standing?.losses ?? 0,
-                    goals_for: standing?.goals_for ?? 0, goals_against: standing?.goals_against ?? 0,
-                    points: standing?.points ?? 0,
-                });
-            }
-            if (eplTeamsToUpsert.length > 0) {
-                console.log(`Upserting ${eplTeamsToUpsert.length} EPL teams to placeholder table...`);
-                const { error: eplTeamError } = await supabase.from("epl_team_stats").upsert(eplTeamsToUpsert, { onConflict: "team_name" });
-                if (eplTeamError) throw eplTeamError;
-                console.log("Successfully upserted EPL team data (placeholder)." );
-            } else { console.log("No EPL team data to upsert."); }
+        // 4. Fetch EPL Player Stats - Use abbr
+        const eplPlayerStatsUrl = `${eplBaseUrl}/season_stats?season=${eplSeason}`;
+        console.log(`Attempting to fetch EPL player stats from: ${eplPlayerStatsUrl}`);
+        // [v31] Add check before fetch - This is where the error likely occurred
+        if (typeof eplPlayerStatsUrl !== 'string' || !eplPlayerStatsUrl) {
+             throw new Error(`Invalid EPL Player Stats URL generated: ${eplPlayerStatsUrl}`);
+        }
+        allEplPlayerStats = await fetchAllPaginatedData(eplPlayerStatsUrl, balldontlieApiKey);
+        console.log(`Fetched ${allEplPlayerStats.length} EPL player season stats entries.`);
 
-            const eplPlayerStatsUrl = `${eplBaseUrl}/season_stats?season=${eplSeason}`;
-            const allEplPlayerStats = await fetchAllPaginatedData(eplPlayerStatsUrl, balldontlieApiKey);
-            console.log(`Fetched ${allEplPlayerStats.length} EPL player season stats entries.`);
-            const finalEplPlayerPropsMap = new Map();
-            if (allEplPlayerStats && Array.isArray(allEplPlayerStats)) {
-                for (const stats of allEplPlayerStats) {
-                    const player = stats.player; if (!player) continue;
-                    const playerName = `${player.first_name ?? 'Unknown'} ${player.last_name ?? 'Player'}`.trim();
-                    const teamAbbreviation = player.team?.abbreviation?.trim().toUpperCase() ?? 'N/A';
-                    const props = { 'Goals': stats.goals ?? 0, 'Assists': stats.assists ?? 0, 'YellowCards': stats.yellow_cards ?? 0 };
-                    for (const [propType, propValue] of Object.entries(props)) {
-                         if (propValue === 0) continue;
-                         const uniqueKey = `${playerName}-${propType}`;
-                         const propData = {
-                             player_name: playerName, team: teamAbbreviation, prop_type: propType, prop_value: propValue,
-                             analysis: `Season ${propType}: ${propValue}`, confidence: 3
-                         };
-                         finalEplPlayerPropsMap.set(uniqueKey, propData);
-                    }
+        // 5. Process and Upsert EPL Player Props (Using placeholder table names)
+        const finalEplPlayerPropsMap = new Map();
+        if (allEplPlayerStats && Array.isArray(allEplPlayerStats)) {
+            for (const stats of allEplPlayerStats) {
+                const player = stats.player;
+                if (!player) continue;
+                const playerName = `${player.first_name ?? 'Unknown'} ${player.last_name ?? 'Player'}`.trim();
+                // FIX: Use player.team.abbr
+                const teamAbbreviation = player.team?.abbr?.trim().toUpperCase() ?? 'N/A';
+                
+                // Example props (adjust based on actual API response)
+                const props = {
+                    'Goals': stats.goals ?? 0,
+                    'Assists': stats.assists ?? 0,
+                    'YellowCards': stats.yellow_cards ?? 0,
+                };
+
+                for (const [propType, propValue] of Object.entries(props)) {
+                     if (propValue === 0) continue; // Optional: skip zero values
+                     const uniqueKey = `${playerName}-${propType}`;
+                     const propData = {
+                         player_name: playerName, team: teamAbbreviation, prop_type: propType, prop_value: propValue,
+                         analysis: `Season ${propType}: ${propValue}`, confidence: 3
+                     };
+                     finalEplPlayerPropsMap.set(uniqueKey, propData);
                 }
             }
-            const eplPlayerPropsToUpsert = Array.from(finalEplPlayerPropsMap.values());
-            if (eplPlayerPropsToUpsert.length > 0) {
-                console.log(`Upserting ${eplPlayerPropsToUpsert.length} EPL player props to placeholder table...`);
-                const { error: eplPlayerError } = await supabase.from("epl_player_props").upsert(eplPlayerPropsToUpsert, { onConflict: "player_name, prop_type" });
-                if (eplPlayerError) throw eplPlayerError;
-                console.log("Successfully upserted EPL player props (placeholder).");
-            } else { console.log("No EPL player props to upsert."); }
+        }
+        const eplPlayerPropsToUpsert = Array.from(finalEplPlayerPropsMap.values());
+        if (eplPlayerPropsToUpsert.length > 0) {
+            console.log(`Upserting ${eplPlayerPropsToUpsert.length} EPL player props to placeholder table...`);
+            const { error: eplPlayerError } = await supabase
+                .from("epl_player_props") // Placeholder table name
+                .upsert(eplPlayerPropsToUpsert, { onConflict: "player_name, prop_type" });
+            if (eplPlayerError) throw eplPlayerError;
+            console.log("Successfully upserted EPL player props (placeholder).");
+        } else {
+            console.log("No EPL player props to upsert.");
         }
 
     } catch (eplError) {
-        // Log specific EPL errors but don't stop the whole function if it's just EPL failing
+        // [v31] Enhanced Error Logging
         console.error("EPL data fetch/process error (Placeholder):", eplError.message);
+        console.error("Full EPL Error Object:", JSON.stringify(eplError, null, 2)); 
         // Check if it's a 404 or similar indicating the endpoint might not exist
         if (eplError.message.includes("404")) {
             console.warn("EPL endpoints might not be available or require different parameters.");
         }
+        // Do not re-throw, allow function to continue with other sports
     } 
     console.log("--- Finished EPL Data Fetch (Placeholder) ---");
 
