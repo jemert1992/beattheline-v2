@@ -286,11 +286,8 @@ serve(async (req) => {
     console.log("--- Generating Bets of the Day (TODO) ---");
     // Implement logic to select top bets
 
-    // Return success response
-    return new Response(JSON.stringify({ message: "Sports data update process completed for NBA & NHL (partially)." }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
-    });;
+    // Return success response (Simplified for debugging syntax error)
+    return new Response("Success", { status: 200 });
 
   } catch (error) {
     console.error("Function error:", error.message, error.stack);
