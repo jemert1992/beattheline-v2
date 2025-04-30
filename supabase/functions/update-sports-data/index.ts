@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 
-console.log("Initializing update-sports-data function (v27)");
+console.log("Initializing update-sports-data function (v28 Diagnostic)");
 
 // --- Helper Function to fetch paginated data ---
 async function fetchAllPaginatedData(url: string, apiKey: string) {
@@ -92,6 +92,7 @@ serve(async (req) => {
     // --- Fetch NBA Data ---
     console.log("--- Starting NBA Data Fetch ---");
     try {
+        // ... (NBA code remains the same) ...
         // 1. Fetch All Teams (Basic Info)
         const nbaTeamsUrl = "https://api.balldontlie.io/v1/teams";
         const allTeams = await fetchAllPaginatedData(nbaTeamsUrl, balldontlieApiKey);
@@ -165,6 +166,7 @@ serve(async (req) => {
     // --- Fetch NHL Data ---
     console.log("--- Starting NHL Data Fetch ---");
     try {
+        // ... (NHL code remains the same) ...
       const nhlSeasonYYYYYYYY = "20232024";
       const nhlGameType = 2;
       
@@ -251,18 +253,17 @@ serve(async (req) => {
     }
     console.log("--- Finished NHL Data Fetch ---");
 
-    // --- Fetch MLB Data (v27 Fixes) ---
-    console.log("--- Starting MLB Data Fetch (v27) ---");
+    // --- Fetch MLB Data (v28 Diagnostic) ---
+    console.log("--- Starting MLB Data Fetch (v28 Diagnostic) ---");
     const mlbBaseUrl = "https://api.balldontlie.io/mlb/v1";
     try {
       // 1. Fetch MLB Teams (Definitive List) - Key by ABBREVIATION
       const mlbTeamsUrl = `${mlbBaseUrl}/teams`;
       const allMlbTeams = await fetchAllPaginatedData(mlbTeamsUrl, balldontlieApiKey);
       console.log(`Fetched ${allMlbTeams.length} MLB teams basic info.`);
-      // Use ABBREVIATION as the key, ensure it exists and is consistent
       const mlbTeamMap = new Map(); 
       allMlbTeams.forEach(team => {
-          const abbreviation = team.abbreviation?.trim().toUpperCase(); // Normalize key
+          const abbreviation = team.abbreviation?.trim().toUpperCase();
           if (abbreviation) {
               mlbTeamMap.set(abbreviation, team);
           } else {
@@ -271,20 +272,32 @@ serve(async (req) => {
       });
       console.log(`Created MLB team map with ${mlbTeamMap.size} entries keyed by abbreviation.`);
 
-      // 2. Fetch MLB Team Standings - Key by ABBREVIATION
+      // 2. Fetch MLB Team Standings - Add DIAGNOSTIC LOGGING
       const mlbStandingsUrl = `${mlbBaseUrl}/standings?season=${currentSeason}`;
       const allMlbStandings = await fetchAllPaginatedData(mlbStandingsUrl, balldontlieApiKey);
       console.log(`Fetched ${allMlbStandings.length} MLB team standings entries.`);
-      // Create a map for quick lookup of standings by ABBREVIATION
+      
+      // --- DIAGNOSTIC LOGGING FOR STANDINGS STRUCTURE ---
+      if (allMlbStandings && allMlbStandings.length > 0) {
+          console.log("--- [MLB DIAGNOSTIC] First Standing Object Structure ---");
+          console.log(JSON.stringify(allMlbStandings[0], null, 2));
+          console.log("-------------------------------------------------------");
+      } else {
+          console.log("--- [MLB DIAGNOSTIC] No standings data received. ---");
+      }
+      // --- END DIAGNOSTIC LOGGING ---
+
+      // Create a map for quick lookup of standings by ABBREVIATION (Attempt based on v27 logic, may fail)
       const mlbStandingsMap = new Map();
       allMlbStandings.forEach(standing => {
-          // Find the corresponding team abbreviation from the /teams data using team_id
-          const teamInfo = allMlbTeams.find(t => t.id === standing.team_id);
-          const abbreviation = teamInfo?.abbreviation?.trim().toUpperCase(); // Normalize key
+          // Find the corresponding team abbreviation from the /teams data using team_id (This is the part that failed in v27)
+          const teamInfo = allMlbTeams.find(t => t.id === standing.team_id); // Expecting standing.team_id to exist
+          const abbreviation = teamInfo?.abbreviation?.trim().toUpperCase();
           if (abbreviation) {
               mlbStandingsMap.set(abbreviation, standing);
           } else {
-              console.warn(`MLB Standing for team_id ${standing.team_id} could not be mapped to an abbreviation, skipping.`);
+              // Log the problematic standing object if mapping fails
+              console.warn(`MLB Standing could not be mapped to an abbreviation. Standing object: ${JSON.stringify(standing)}`);
           }
       });
        console.log(`Created MLB standings map with ${mlbStandingsMap.size} entries keyed by abbreviation.`);
@@ -299,9 +312,8 @@ serve(async (req) => {
       if (allMlbPlayerStats && Array.isArray(allMlbPlayerStats)) {
           console.log("Starting MLB player stats aggregation by abbreviation..."); 
           for (const stats of allMlbPlayerStats) {
-            // Use ABBREVIATION from player.team object as the key
-            const teamAbbreviation = stats.player?.team?.abbreviation?.trim().toUpperCase(); // Normalize key
-            if (!teamAbbreviation) continue; // Skip players without a team abbreviation
+            const teamAbbreviation = stats.player?.team?.abbreviation?.trim().toUpperCase();
+            if (!teamAbbreviation) continue;
 
             if (!teamAggregatedStats.has(teamAbbreviation)) {
               teamAggregatedStats.set(teamAbbreviation, {
@@ -314,7 +326,6 @@ serve(async (req) => {
             const teamStats = teamAggregatedStats.get(teamAbbreviation);
             teamStats.total_hits += stats.batting_h ?? 0;
             teamStats.total_at_bats += stats.batting_ab ?? 0;
-            // Ensure correct parsing and handling of potential non-numeric values
             const earnedRuns = parseFloat(stats.pitching_er);
             const inningsPitched = parseFloat(stats.pitching_ip);
             if (!isNaN(earnedRuns)) teamStats.total_earned_runs += earnedRuns;
@@ -326,20 +337,18 @@ serve(async (req) => {
       }
       console.log(`Aggregated stats for ${teamAggregatedStats.size} MLB teams keyed by abbreviation.`);
 
-      // 5. Combine Team Info, Standings, and Aggregated Stats (Iterate over UNIQUE abbreviations)
+      // 5. Combine Team Info, Standings, and Aggregated Stats - FIX SCHEMA MISMATCH
       const finalMlbTeamsToUpsert = [];
       console.log("Starting MLB team data combination (iterating over unique abbreviations)...");
-      for (const teamAbbreviation of mlbTeamMap.keys()) { // Iterate over unique abbreviations from /teams
+      for (const teamAbbreviation of mlbTeamMap.keys()) {
           const teamInfo = mlbTeamMap.get(teamAbbreviation);
-          const standing = mlbStandingsMap.get(teamAbbreviation); // Find corresponding standing by abbreviation
-          const aggregated = teamAggregatedStats.get(teamAbbreviation); // Find corresponding aggregated stats by abbreviation
+          const standing = mlbStandingsMap.get(teamAbbreviation);
+          const aggregated = teamAggregatedStats.get(teamAbbreviation);
 
-          // If we don't have basic info, skip (shouldn't happen if iterating map keys)
           if (!teamInfo) continue; 
 
           const teamName = `${teamInfo.display_name ?? 'Unknown'} (${teamInfo.abbreviation ?? 'N/A'})`;
           
-          // Calculate ERA and AVG safely
           let era = null;
           let batting_average = null;
           if (aggregated) {
@@ -350,16 +359,25 @@ serve(async (req) => {
                   batting_average = aggregated.total_hits / aggregated.total_at_bats;
               }
           }
+          
+          // FIX: Use win_loss_record column
+          const wins = standing?.wins ?? 0;
+          const losses = standing?.losses ?? 0;
+          const winLossRecord = `${wins}-${losses}`; 
 
           const teamData = {
-              team_name: teamName, // Unique constraint field
-              wins: standing?.wins ?? 0, // Use standing data if found
-              losses: standing?.losses ?? 0, // Use standing data if found
-              era: era, // Use calculated ERA if possible
-              batting_average: batting_average, // Use calculated AVG if possible
+              team_name: teamName,
+              // wins: wins, // Removed
+              // losses: losses, // Removed
+              win_loss_record: winLossRecord, // Added
+              era: era,
+              batting_average: batting_average,
+              // Add other columns from user input if needed, ensure they exist in the table
+              // first_inning_trend: 'N/A', // Example placeholder if needed
+              // pitcher_name: 'N/A', // Example placeholder if needed
+              // first_inning_era: null, // Example placeholder if needed
           };
           finalMlbTeamsToUpsert.push(teamData);
-          // console.log(`Prepared team: ${teamName}, Wins: ${teamData.wins}, ERA: ${teamData.era}, AVG: ${teamData.batting_average}`); // Optional detailed log
       }
       console.log(`Prepared ${finalMlbTeamsToUpsert.length} unique MLB teams for upsert.`);
 
@@ -369,24 +387,27 @@ serve(async (req) => {
         const { error: mlbTeamUpsertError } = await supabase
           .from("mlb_team_stats")
           .upsert(finalMlbTeamsToUpsert, { onConflict: "team_name" });
-        if (mlbTeamUpsertError) throw mlbTeamUpsertError;
+        // Check specifically for schema mismatch errors if possible
+        if (mlbTeamUpsertError) {
+            console.error("MLB Team Upsert Error Details:", JSON.stringify(mlbTeamUpsertError));
+            throw mlbTeamUpsertError;
+        }
         console.log("Successfully upserted MLB team data.");
       } else {
-        console.log("No combined MLB team stats to upsert.");
+        console.log("No combined MLB team stats to upsert (check standings mapping)." );
       }
 
       // 7. Process and Prepare MLB Player Props using a Map for uniqueness
-      const finalMlbPlayerPropsMap = new Map(); // Use Map for uniqueness
+      const finalMlbPlayerPropsMap = new Map();
       if (allMlbPlayerStats && Array.isArray(allMlbPlayerStats)) {
           console.log("Starting MLB player prop processing...");
           for (const stats of allMlbPlayerStats) {
               const player = stats.player;
-              if (!player) continue; // Skip if no player info
+              if (!player) continue;
 
               const playerName = `${player.first_name ?? 'Unknown'} ${player.last_name ?? 'Player'}`.trim();
               const teamAbbreviation = player.team?.abbreviation?.trim().toUpperCase() ?? 'N/A';
 
-              // Define props to extract
               const props = {
                   'AVG': (stats.batting_ab ?? 0) > 0 ? (stats.batting_h ?? 0) / stats.batting_ab : 0,
                   'HR': stats.batting_hr ?? 0,
@@ -396,21 +417,20 @@ serve(async (req) => {
               };
 
               for (const [propType, propValue] of Object.entries(props)) {
-                  // Skip ERA for non-pitchers (ERA is null) or W for non-pitchers (W is 0)
                   if ((propType === 'ERA' && propValue === null) || (propType === 'W' && propValue === 0 && (parseFloat(stats.pitching_ip) || 0) === 0)) {
                       continue;
                   }
                   
-                  const uniqueKey = `${playerName}-${propType}`; // Key for uniqueness
+                  const uniqueKey = `${playerName}-${propType}`;
                   const propData = {
                       player_name: playerName,
                       team: teamAbbreviation,
                       prop_type: propType,
                       prop_value: propValue,
-                      analysis: `Season ${propType}: ${propValue?.toFixed ? propValue.toFixed(3) : propValue}`, // Basic analysis
-                      confidence: 3, // Placeholder confidence
+                      analysis: `Season ${propType}: ${propValue?.toFixed ? propValue.toFixed(3) : propValue}`,
+                      confidence: 3,
                   };
-                  finalMlbPlayerPropsMap.set(uniqueKey, propData); // Add/overwrite in Map
+                  finalMlbPlayerPropsMap.set(uniqueKey, propData);
               }
           }
           console.log("Finished MLB player prop processing loop.");
@@ -441,6 +461,7 @@ serve(async (req) => {
     // --- Fetch EPL Data (Placeholder) ---
     console.log("--- Starting EPL Data Fetch (Placeholder) ---");
     try {
+        // ... (EPL code remains the same) ...
         const eplBaseUrl = "https://api.balldontlie.io/epl/v1"; // Assuming similar structure
         const eplSeason = 2024; // Using 2024 as requested
 
@@ -541,11 +562,10 @@ serve(async (req) => {
     } catch (eplError) {
         // Log specific EPL errors but don't stop the whole function
         console.error("EPL data fetch/process error (Placeholder):", eplError.message);
-        // Check if it's a 404 or similar indicating the endpoint might not exist
         if (eplError.message.includes("404")) {
             console.warn("EPL endpoints might not be available or require different parameters.");
         }
-    }
+    } 
     console.log("--- Finished EPL Data Fetch (Placeholder) ---");
 
     // --- Function Completion ---
