@@ -211,7 +211,7 @@ serve(async (req) => {
       const nhlPlayerPropsToUpsert = [];
       
       // Fetch skater stats for points, goals, etc.
-      const nhlSkaterStats = await fetchNhlData(`/v1/skater-stats-leaders/${nhlSeasonYYYYYYYY}/${nhlGameType}?categories=points,goals,assists&limit=50`);
+      const nhlSkaterStats = await fetchNhlData(`/v1/skater-stats-leaders/${nhlSeasonYYYYYYYY}/${nhlGameType}`);
       console.log(`Fetched NHL skater stats with ${nhlSkaterStats.categories?.length || 0} categories.`);
       
       if (nhlSkaterStats.categories && nhlSkaterStats.categories.length > 0) {
