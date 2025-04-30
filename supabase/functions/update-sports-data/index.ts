@@ -269,10 +269,8 @@ serve(async (req) => {
         const teamInfo = mlbTeamMap.get(standing.team_id);
         return {
           team_name: teamInfo ? `${teamInfo.display_name} (${teamInfo.abbreviation})` : `Unknown Team (${standing.team_id})`,
-          win_loss_record: `${standing.wins || 0}-${standing.losses || 0}`,
-          // Standings endpoint might not have ERA/AVG, set to null or fetch separately if needed
-          era: null, 
-          batting_average: null, 
+          win_loss_record: `${standing.wins || 0}-${standing.losses || 0}`
+          // Removed era and batting_average as they are not in standings data and caused schema error
         };
       });
 
