@@ -251,7 +251,7 @@ serve(async (req) => {
 
     // --- Fetch MLB Data ---
     console.log("--- Starting MLB Data Fetch ---");
-    const mlbBaseUrl = "https://mlb.balldontlie.io/mlb/v1";
+    const mlbBaseUrl = "https://api.balldontlie.io/mlb/v1";
     try {
       // 1. Fetch MLB Teams
       const mlbTeamsUrl = `${mlbBaseUrl}/teams`;
@@ -379,35 +379,10 @@ serve(async (req) => {
     }
     console.log("--- Finished MLB Data Fetch ---");
 
-    // --- TODO: Generate and store Predictions ---
-    console.log("--- Generating Predictions (TODO) ---");
-
-    // --- TODO: Generate and store Bets of the Day ---
-    console.log("--- Generating Bets of the Day (TODO) ---");
-
-    // Return success response including all sports attempted
-    return new Response(JSON.stringify({ message: "Sports data update process completed for NBA, NHL (partially), MLB, and EPL (placeholder)." }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
-    });
-
-  } catch (error) {
-    console.error("Function error:", error.message, error.stack);
-    return new Response(JSON.stringify({ error: error.message }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
-    });
-  }
-});
-
-console.log("update-sports-data function handler registered.");
-
-
-
     // --- Fetch EPL Data ---
     console.log("--- Starting EPL Data Fetch ---");
     // Assuming EPL API follows a similar pattern, adjust base URL if needed
-    const eplBaseUrl = "https://epl.balldontlie.io/epl/v1"; // Placeholder - Verify correct URL
+    const eplBaseUrl = "https://api.balldontlie.io/epl/v1"; // Placeholder - Verify correct URL
     try {
       // 1. Fetch EPL Teams
       const eplTeamsUrl = `${eplBaseUrl}/teams`;
@@ -516,4 +491,25 @@ console.log("update-sports-data function handler registered.");
     console.log("--- Finished EPL Data Fetch ---");
 
     // --- TODO: Generate and store Predictions ---
+    console.log("--- Generating Predictions (TODO) ---");
+
+    // --- TODO: Generate and store Bets of the Day ---
+    console.log("--- Generating Bets of the Day (TODO) ---");
+
+    // Return success response including all sports attempted
+    return new Response(JSON.stringify({ message: "Sports data update process completed for NBA, NHL (partially), MLB, and EPL (placeholder)." }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 200,
+    });
+
+  } catch (error) {
+    console.error("Function error:", error.message, error.stack);
+    return new Response(JSON.stringify({ error: error.message }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500,
+    });
+  }
+});
+
+console.log("update-sports-data function handler registered.");
 
