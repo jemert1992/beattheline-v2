@@ -141,7 +141,7 @@ serve(async (req) => {
 
         // 5. Process and Upsert Player Props/Stats
         if (allPlayerAverages && allPlayerAverages.length > 0) { // Check if array exists and is not empty
-            console.log("Sample Player Average Data:", JSON.stringify(allPlayerAverages[0], null, 2));
+            // console.log("Sample Player Average Data:", JSON.stringify(allPlayerAverages[0], null, 2)); // Removed for brevity
             const playerStatsToUpsert = allPlayerAverages.map((avg: any) => ({
                 // Safely access player and team data
                 player_name: `${avg.player?.first_name ?? 'Unknown'} ${avg.player?.last_name ?? 'Player'}`, 
@@ -291,36 +291,17 @@ serve(async (req) => {
       // Check if allMlbPlayerStats exists and is an array
       if (allMlbPlayerStats && Array.isArray(allMlbPlayerStats)) {
           console.log("Starting MLB player stats aggregation..."); 
-          let processedCount = 0; 
-          let loggedFirstPlayer = false; // Flag to log only the first player's structure
           for (const stats of allMlbPlayerStats) {
-            processedCount++; 
-            
-            // DIAGNOSTIC LOG: Log the *entire structure* of the first player stat object
-            if (!loggedFirstPlayer) {
-                console.log("--- [MLB DIAGNOSTIC] First Player Stat Object Structure ---");
-                console.log(JSON.stringify(stats, null, 2));
-                console.log("--- End First Player Stat Object Structure ---");
-                loggedFirstPlayer = true;
-            }
-
-            // *** Placeholder for actual team ID logic - we need to find it first ***
-            // const teamId = stats.team?.id; // This is incorrect based on v23 logs
-            const teamId = stats.team_id; // HYPOTHESIS: Maybe it's stats.team_id?
-            console.log(`[MLB Aggregation] Processing player ${processedCount}/${allMlbPlayerStats.length}: ${stats.player?.first_name} ${stats.player?.last_name}`);
-            console.log(`[MLB Aggregation] Attempting to use team ID: ${teamId}, Type: ${typeof teamId}`);
+            // *** CORRECTED: Use stats.player.team.id ***
+            const teamId = stats.player?.team?.id; 
             
             // Safely access team id
             if (!teamId) {
-                console.log("[MLB Aggregation] Skipping player due to missing team ID."); 
+                // console.log("[MLB Aggregation] Skipping player due to missing team ID."); // Removed diagnostic log
                 continue; // Skip players without a team ID
             }
 
-            // const teamId = stats.team.id; // Original incorrect line
-            console.log(`[MLB Aggregation] Using teamId: ${teamId}`); 
-            
             if (!teamAggregatedStats.has(teamId)) {
-              console.log(`[MLB Aggregation] Initializing aggregated stats for teamId: ${teamId}`); 
               teamAggregatedStats.set(teamId, {
                 total_hits: 0,
                 total_at_bats: 0,
@@ -331,12 +312,12 @@ serve(async (req) => {
             const teamStats = teamAggregatedStats.get(teamId);
 
             // Aggregate batting stats safely
-            teamStats.total_hits += stats.hits ?? 0;
-            teamStats.total_at_bats += stats.at_bats ?? 0;
+            teamStats.total_hits += stats.batting_h ?? 0; // Use correct field name
+            teamStats.total_at_bats += stats.batting_ab ?? 0; // Use correct field name
 
             // Aggregate pitching stats safely (ensure values are numbers)
-            const earnedRuns = parseFloat(stats.earned_runs);
-            const inningsPitched = parseFloat(stats.innings_pitched);
+            const earnedRuns = parseFloat(stats.pitching_er); // Use correct field name
+            const inningsPitched = parseFloat(stats.pitching_ip); // Use correct field name
             if (!isNaN(earnedRuns)) {
                 teamStats.total_earned_runs += earnedRuns;
             }
@@ -358,22 +339,20 @@ serve(async (req) => {
       if (allMlbStandings && Array.isArray(allMlbStandings)) {
           console.log("Starting MLB standings combination..."); 
           for (const standing of allMlbStandings) {
-            console.log(`[MLB Combine] Processing standing for team_id: ${standing.team_id}, Type: ${typeof standing.team_id}`);
-            
             const teamInfo = mlbTeamMap.get(standing.team_id);
             if (!teamInfo) {
-                console.log(`[MLB Combine] Skipping standing for team_id ${standing.team_id} - teamInfo not found in mlbTeamMap.`); 
+                // console.log(`[MLB Combine] Skipping standing for team_id ${standing.team_id} - teamInfo not found in mlbTeamMap.`); // Removed diagnostic log
                 continue; 
             }
 
             const teamName = `${teamInfo.display_name ?? 'Unknown'} (${teamInfo.abbreviation ?? 'N/A'})`;
             const aggregated = teamAggregatedStats.get(standing.team_id);
             
-            if (aggregated) {
-                console.log(`[MLB Combine] Found aggregated stats for team_id ${standing.team_id}: ${JSON.stringify(aggregated)}`);
-            } else {
-                console.log(`[MLB Combine] No aggregated stats found for team_id ${standing.team_id}. ERA/AVG will be null.`);
-            }
+            // if (aggregated) { // Removed diagnostic log
+            //     console.log(`[MLB Combine] Found aggregated stats for team_id ${standing.team_id}: ${JSON.stringify(aggregated)}`);
+            // } else {
+            //     console.log(`[MLB Combine] No aggregated stats found for team_id ${standing.team_id}. ERA/AVG will be null.`);
+            // }
 
             let teamBattingAverage = null;
             if (aggregated && aggregated.total_at_bats > 0) {
@@ -385,7 +364,7 @@ serve(async (req) => {
               teamEra = (aggregated.total_earned_runs / aggregated.total_innings_pitched) * 9;
             }
 
-            console.log(`[MLB Combine] Setting final data for team: ${teamName}`); 
+            // console.log(`[MLB Combine] Setting final data for team: ${teamName}`); // Removed diagnostic log
             finalMlbTeamsToUpsertMap.set(teamName, {
               team_name: teamName,
               win_loss_record: `${standing.wins ?? 0}-${standing.losses ?? 0}`,
@@ -416,7 +395,7 @@ serve(async (req) => {
       const mlbPlayerPropsToUpsert = [];
       // Add check for allMlbPlayerStats existence and length
       if (allMlbPlayerStats && allMlbPlayerStats.length > 0) {
-        console.log("Sample MLB Player Stat Data (v24):", JSON.stringify(allMlbPlayerStats[0], null, 2)); // Log first player again for structure check
+        // console.log("Sample MLB Player Stat Data (v25):", JSON.stringify(allMlbPlayerStats[0], null, 2)); // Removed diagnostic log
         for (const stats of allMlbPlayerStats) {
           // Defensive check: Ensure stats and stats.player exist before accessing properties
           if (!stats || !stats.player) {
@@ -427,71 +406,67 @@ serve(async (req) => {
           // Safely access player name parts using nullish coalescing
           const playerName = `${stats.player.first_name ?? 'Unknown'} ${stats.player.last_name ?? 'Player'}`;
           
-          // *** Placeholder for actual team abbreviation logic - depends on where team ID is found ***
-          // const teamAbbr = stats.team?.abbreviation ?? 'N/A'; // Incorrect
-          const teamIdForAbbr = stats.team_id; // HYPOTHESIS: Use the same ID as aggregation
-          const teamInfoForAbbr = teamIdForAbbr ? mlbTeamMap.get(teamIdForAbbr) : null;
-          const teamAbbr = teamInfoForAbbr?.abbreviation ?? 'N/A';
+          // *** CORRECTED: Use stats.player.team.abbreviation ***
+          const teamAbbr = stats.player?.team?.abbreviation ?? 'N/A';
 
           // Use nullish coalescing for games played/pitched in analysis strings
-          const gamesPlayedOrPitched = stats.games_pitched ?? stats.games_played ?? 0;
-          const gamesPlayed = stats.games_played ?? 0;
-          const gamesPitched = stats.games_pitched ?? 0;
-
+          const gamesPlayed = stats.batting_gp ?? 0; // Use correct field name
+          const gamesPitched = stats.pitching_gp ?? 0; // Use correct field name
+          const gamesPlayedOrPitched = gamesPitched > 0 ? gamesPitched : gamesPlayed;
 
           // Add Pitcher ERA if available
-          if (stats.era !== null && stats.era !== undefined) {
+          if (stats.pitching_era !== null && stats.pitching_era !== undefined) { // Use correct field name
              mlbPlayerPropsToUpsert.push({
                 player_name: playerName,
                 team: teamAbbr,
                 prop_type: 'Season ERA',
-                prop_value: stats.era,
-                analysis: `ERA: ${stats.era} in ${gamesPlayedOrPitched} games`,
+                prop_value: stats.pitching_era,
+                analysis: `ERA: ${stats.pitching_era} in ${gamesPlayedOrPitched} games`,
                 confidence: 3, // Placeholder confidence
              });
           }
           // Add Batting Average if available
-          if (stats.avg !== null && stats.avg !== undefined) {
+          if (stats.batting_avg !== null && stats.batting_avg !== undefined) { // Use correct field name
              mlbPlayerPropsToUpsert.push({
                 player_name: playerName,
                 team: teamAbbr,
                 prop_type: 'Season AVG',
-                prop_value: stats.avg,
-                analysis: `AVG: ${stats.avg} in ${gamesPlayed} games`,
+                prop_value: stats.batting_avg,
+                analysis: `AVG: ${stats.batting_avg} in ${gamesPlayed} games`,
                 confidence: 3, // Placeholder confidence
              });
           }
            // Add Home Runs if available
-          if (stats.hr !== null && stats.hr !== undefined) {
+          if (stats.batting_hr !== null && stats.batting_hr !== undefined) { // Use correct field name
              mlbPlayerPropsToUpsert.push({
                 player_name: playerName,
                 team: teamAbbr,
                 prop_type: 'Season HR',
-                prop_value: stats.hr,
-                analysis: `${stats.hr} HR in ${gamesPlayed} games`,
+                prop_value: stats.batting_hr,
+                analysis: `${stats.batting_hr} HR in ${gamesPlayed} games`,
                 confidence: 3, // Placeholder confidence
              });
           }
           // Add RBIs if available
-          if (stats.rbi !== null && stats.rbi !== undefined) {
+          if (stats.batting_rbi !== null && stats.batting_rbi !== undefined) { // Use correct field name
              mlbPlayerPropsToUpsert.push({
                 player_name: playerName,
                 team: teamAbbr,
                 prop_type: 'Season RBI',
-                prop_value: stats.rbi,
-                analysis: `${stats.rbi} RBI in ${gamesPlayed} games`,
+                prop_value: stats.batting_rbi,
+                analysis: `${stats.batting_rbi} RBI in ${gamesPlayed} games`,
                 confidence: 3, // Placeholder confidence
              });
           }
           // Add Pitcher Wins if available
           // Check games_pitched > 0 and safely access wins
-          if (gamesPitched > 0 && stats.wins !== null && stats.wins !== undefined) {
+          if (gamesPitched > 0 && stats.pitching_w !== null && stats.pitching_w !== undefined) { // Use correct field name
              mlbPlayerPropsToUpsert.push({
                 player_name: playerName,
                 team: teamAbbr,
                 prop_type: 'Season Wins (Pitcher)',
-                prop_value: stats.wins,
-                analysis: `${stats.wins} Wins in ${gamesPitched} games pitched`,
+                prop_value: stats.pitching_w,
+                analysis: `${stats.pitching_w} Wins in ${gamesPitched} games pitched`,
                 confidence: 3, // Placeholder confidence
              });
           }
@@ -576,7 +551,7 @@ serve(async (req) => {
       const eplPlayerPropsToUpsert = [];
       // Check if allEplPlayerStats exists and is an array
       if (allEplPlayerStats && Array.isArray(allEplPlayerStats)) {
-        console.log("Sample EPL Player Stat Data:", JSON.stringify(allEplPlayerStats[0], null, 2));
+        // console.log("Sample EPL Player Stat Data:", JSON.stringify(allEplPlayerStats[0], null, 2)); // Removed for brevity
         for (const stats of allEplPlayerStats) {
           // Defensive check: Ensure stats and stats.player exist before accessing properties
           if (!stats || !stats.player) {
@@ -586,7 +561,7 @@ serve(async (req) => {
           // Safely access player name parts using nullish coalescing
           const playerName = `${stats.player.first_name ?? 'Unknown'} ${stats.player.last_name ?? 'Player'}`;
           // Safely access team abbreviation using optional chaining and nullish coalescing
-          const teamAbbr = stats.team?.abbreviation ?? 'N/A';
+          const teamAbbr = stats.player?.team?.abbreviation ?? 'N/A'; // Corrected path
           // Use nullish coalescing for games played
           const gamesPlayed = stats.games_played ?? 0;
 
