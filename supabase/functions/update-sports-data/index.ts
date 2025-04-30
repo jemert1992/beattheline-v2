@@ -311,13 +311,13 @@ serve(async (req) => {
             }
             const teamStats = teamAggregatedStats.get(teamId);
 
-            // Aggregate batting stats safely
-            teamStats.total_hits += stats.batting_h ?? 0; // Use correct field name
-            teamStats.total_at_bats += stats.batting_ab ?? 0; // Use correct field name
+            // Aggregate batting stats safely using correct field names
+            teamStats.total_hits += stats.batting_h ?? 0; 
+            teamStats.total_at_bats += stats.batting_ab ?? 0; 
 
-            // Aggregate pitching stats safely (ensure values are numbers)
-            const earnedRuns = parseFloat(stats.pitching_er); // Use correct field name
-            const inningsPitched = parseFloat(stats.pitching_ip); // Use correct field name
+            // Aggregate pitching stats safely (ensure values are numbers) using correct field names
+            const earnedRuns = parseFloat(stats.pitching_er); 
+            const inningsPitched = parseFloat(stats.pitching_ip); 
             if (!isNaN(earnedRuns)) {
                 teamStats.total_earned_runs += earnedRuns;
             }
@@ -348,12 +348,7 @@ serve(async (req) => {
             const teamName = `${teamInfo.display_name ?? 'Unknown'} (${teamInfo.abbreviation ?? 'N/A'})`;
             const aggregated = teamAggregatedStats.get(standing.team_id);
             
-            // if (aggregated) { // Removed diagnostic log
-            //     console.log(`[MLB Combine] Found aggregated stats for team_id ${standing.team_id}: ${JSON.stringify(aggregated)}`);
-            // } else {
-            //     console.log(`[MLB Combine] No aggregated stats found for team_id ${standing.team_id}. ERA/AVG will be null.`);
-            // }
-
+            // Calculate ERA and AVG
             let teamBattingAverage = null;
             if (aggregated && aggregated.total_at_bats > 0) {
               teamBattingAverage = aggregated.total_hits / aggregated.total_at_bats;
@@ -364,7 +359,6 @@ serve(async (req) => {
               teamEra = (aggregated.total_earned_runs / aggregated.total_innings_pitched) * 9;
             }
 
-            // console.log(`[MLB Combine] Setting final data for team: ${teamName}`); // Removed diagnostic log
             finalMlbTeamsToUpsertMap.set(teamName, {
               team_name: teamName,
               win_loss_record: `${standing.wins ?? 0}-${standing.losses ?? 0}`,
@@ -414,8 +408,8 @@ serve(async (req) => {
           const gamesPitched = stats.pitching_gp ?? 0; // Use correct field name
           const gamesPlayedOrPitched = gamesPitched > 0 ? gamesPitched : gamesPlayed;
 
-          // Add Pitcher ERA if available
-          if (stats.pitching_era !== null && stats.pitching_era !== undefined) { // Use correct field name
+          // Add Pitcher ERA if available (using correct field name)
+          if (stats.pitching_era !== null && stats.pitching_era !== undefined) {
              mlbPlayerPropsToUpsert.push({
                 player_name: playerName,
                 team: teamAbbr,
@@ -425,8 +419,8 @@ serve(async (req) => {
                 confidence: 3, // Placeholder confidence
              });
           }
-          // Add Batting Average if available
-          if (stats.batting_avg !== null && stats.batting_avg !== undefined) { // Use correct field name
+          // Add Batting Average if available (using correct field name)
+          if (stats.batting_avg !== null && stats.batting_avg !== undefined) {
              mlbPlayerPropsToUpsert.push({
                 player_name: playerName,
                 team: teamAbbr,
@@ -436,8 +430,8 @@ serve(async (req) => {
                 confidence: 3, // Placeholder confidence
              });
           }
-           // Add Home Runs if available
-          if (stats.batting_hr !== null && stats.batting_hr !== undefined) { // Use correct field name
+           // Add Home Runs if available (using correct field name)
+          if (stats.batting_hr !== null && stats.batting_hr !== undefined) {
              mlbPlayerPropsToUpsert.push({
                 player_name: playerName,
                 team: teamAbbr,
@@ -447,8 +441,8 @@ serve(async (req) => {
                 confidence: 3, // Placeholder confidence
              });
           }
-          // Add RBIs if available
-          if (stats.batting_rbi !== null && stats.batting_rbi !== undefined) { // Use correct field name
+          // Add RBIs if available (using correct field name)
+          if (stats.batting_rbi !== null && stats.batting_rbi !== undefined) {
              mlbPlayerPropsToUpsert.push({
                 player_name: playerName,
                 team: teamAbbr,
@@ -458,9 +452,9 @@ serve(async (req) => {
                 confidence: 3, // Placeholder confidence
              });
           }
-          // Add Pitcher Wins if available
+          // Add Pitcher Wins if available (using correct field name)
           // Check games_pitched > 0 and safely access wins
-          if (gamesPitched > 0 && stats.pitching_w !== null && stats.pitching_w !== undefined) { // Use correct field name
+          if (gamesPitched > 0 && stats.pitching_w !== null && stats.pitching_w !== undefined) {
              mlbPlayerPropsToUpsert.push({
                 player_name: playerName,
                 team: teamAbbr,
@@ -561,7 +555,7 @@ serve(async (req) => {
           // Safely access player name parts using nullish coalescing
           const playerName = `${stats.player.first_name ?? 'Unknown'} ${stats.player.last_name ?? 'Player'}`;
           // Safely access team abbreviation using optional chaining and nullish coalescing
-          const teamAbbr = stats.player?.team?.abbreviation ?? 'N/A'; // Corrected path
+          const teamAbbr = stats.team?.abbreviation ?? 'N/A'; // Assuming structure is similar to MLB
           // Use nullish coalescing for games played
           const gamesPlayed = stats.games_played ?? 0;
 
