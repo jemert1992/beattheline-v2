@@ -4,11 +4,11 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 import { corsHeaders } from "../_shared/cors.ts";
 import { format } from "https://deno.land/std@0.203.0/datetime/format.ts"; // For date formatting
 
-console.log("Initializing update-sports-data function (v39 Bugfixes & Enhancements)");
+console.log("Initializing update-sports-data function (v40 Final Fixes)");
 
 // --- Helper Function to fetch paginated data (BallDontLie API) ---
 async function fetchAllPaginatedData(url: string, apiKey: string) {
-  // ... (omitted for brevity - same as v38)
+  // ... (omitted for brevity - same as v39)
   if (typeof url !== 'string' || !url) {
     console.error(`[fetchAllPaginatedData] Received invalid URL: ${url}`);
     throw new Error(`[fetchAllPaginatedData] Attempted to fetch with an invalid URL.`);
@@ -61,7 +61,7 @@ async function fetchAllPaginatedData(url: string, apiKey: string) {
 
 // --- Helper function to fetch data from NHL API ---
 async function fetchNhlData(endpoint: string) {
-  // ... (omitted for brevity - same as v38)
+  // ... (omitted for brevity - same as v39)
   console.log(`Fetching NHL data from ${endpoint}...`);
   const response = await fetch(`https://api-web.nhle.com${endpoint}`);
   if (!response.ok) {
@@ -70,7 +70,7 @@ async function fetchNhlData(endpoint: string) {
   return await response.json();
 }
 
-// --- [v39] Helper function to generate AI picks with fixes and enhancements ---
+// --- [v40] Helper function to generate AI picks with fixes and enhancements ---
 function generatePicksForGame(game: any, league: string, homeStats: any, awayStats: any): any[] {
     const picks = [];
     const gameDate = game.date?.split("T")[0] || format(new Date(), "yyyy-MM-dd");
@@ -83,12 +83,12 @@ function generatePicksForGame(game: any, league: string, homeStats: any, awaySta
     // [v39 Fix] Ensure correct team objects are accessed based on league
     if (league === 'nba') { 
         homeTeamName = game.home_team?.full_name;
-        awayTeamName = game.visitor_team?.full_name; // Correctly use visitor_team
+        awayTeamName = game.visitor_team?.full_name; 
         homeTeamAbbr = game.home_team?.abbreviation;
         awayTeamAbbr = game.visitor_team?.abbreviation;
     } else if (league === 'mlb') { 
-        homeTeamName = game.home_team?.name; // MLB API uses name
-        awayTeamName = game.away_team?.name; // MLB API uses away_team and name
+        homeTeamName = game.home_team?.name; 
+        awayTeamName = game.away_team?.name; 
         homeTeamAbbr = game.home_team?.abbreviation;
         awayTeamAbbr = game.away_team?.abbreviation;
     } else if (league === 'nhl') { 
@@ -101,8 +101,8 @@ function generatePicksForGame(game: any, league: string, homeStats: any, awaySta
     // Fallback if names/abbrs are still missing
     homeTeamName = homeTeamName || homeTeamAbbr || 'Home';
     awayTeamName = awayTeamName || awayTeamAbbr || 'Away';
-    homeTeamAbbr = homeTeamAbbr || homeTeamName; // Use name if abbr missing
-    awayTeamAbbr = awayTeamAbbr || awayTeamName; // Use name if abbr missing
+    homeTeamAbbr = homeTeamAbbr || homeTeamName; 
+    awayTeamAbbr = awayTeamAbbr || awayTeamName; 
 
     const matchup = `${awayTeamName} vs ${homeTeamName}`;
     const gameId = game.id?.toString() || `${league}-${gameDate}-${awayTeamAbbr}-${homeTeamAbbr}`;
@@ -119,21 +119,20 @@ function generatePicksForGame(game: any, league: string, homeStats: any, awaySta
             if (winRateDiff !== 0) {
                 pickTeamName = winRateDiff > 0 ? homeTeamName : awayTeamName;
                 pickValue = winRateDiff > 0 ? `Home ML (${homeTeamAbbr})` : `Away ML (${awayTeamAbbr})`;
-                mlConfidence += winRateDiff * 0.4; // [v39] More impact from win rate
+                mlConfidence += winRateDiff * 0.4; 
                 reasons.push(`${pickTeamName} has a ${winRateDiff > 0 ? 'higher' : 'lower'} win rate (${(homeStats.win_rate * 100).toFixed(1)}% vs ${(awayStats.win_rate * 100).toFixed(1)}%).`);
             }
             if (homeStats.offensive_rating && awayStats.offensive_rating) {
                  const offRatingDiff = homeStats.offensive_rating - awayStats.offensive_rating;
                  if (offRatingDiff !== 0) {
-                     mlConfidence += offRatingDiff * 0.02; // [v39] More impact from rating
+                     mlConfidence += offRatingDiff * 0.02; 
                      reasons.push(`${offRatingDiff > 0 ? homeTeamName : awayTeamName} has a better offensive rating (${homeStats.offensive_rating.toFixed(1)} vs ${awayStats.offensive_rating.toFixed(1)}).`);
                  }
             }
-            // Add defensive rating if available
             if (homeStats.defensive_rating && awayStats.defensive_rating) {
                  const defRatingDiff = awayStats.defensive_rating - homeStats.defensive_rating; // Lower is better
                  if (defRatingDiff !== 0) {
-                     mlConfidence += defRatingDiff * 0.02; // [v39] More impact from rating
+                     mlConfidence += defRatingDiff * 0.02; 
                      reasons.push(`${defRatingDiff > 0 ? homeTeamName : awayTeamName} has a better defensive rating (${homeStats.defensive_rating.toFixed(1)} vs ${awayStats.defensive_rating.toFixed(1)}).`);
                  }
             }
@@ -143,11 +142,11 @@ function generatePicksForGame(game: any, league: string, homeStats: any, awaySta
             if (savePctDiff !== 0) {
                 pickTeamName = savePctDiff > 0 ? homeTeamName : awayTeamName;
                 pickValue = savePctDiff > 0 ? `Home ML (${homeTeamAbbr})` : `Away ML (${awayTeamAbbr})`;
-                mlConfidence += savePctDiff * 2.5; // [v39] More impact
+                mlConfidence += savePctDiff * 2.5; 
                 reasons.push(`${pickTeamName} has a better goalie save % (${homeStats.goalie_save_percentage.toFixed(3)} vs ${awayStats.goalie_save_percentage.toFixed(3)}).`);
             }
             if (ppEffDiff !== 0) {
-                mlConfidence += ppEffDiff * 0.8; // [v39] More impact
+                mlConfidence += ppEffDiff * 0.8; 
                 reasons.push(`${ppEffDiff > 0 ? homeTeamName : awayTeamName} is stronger on the power play (${(homeStats.power_play_efficiency*100).toFixed(1)}% vs ${(awayStats.power_play_efficiency*100).toFixed(1)}%).`);
             }
         } else if (league === 'mlb' && homeStats.era !== undefined && awayStats.era !== undefined) {
@@ -156,16 +155,18 @@ function generatePicksForGame(game: any, league: string, homeStats: any, awaySta
             if (eraDiff !== 0) {
                 pickTeamName = eraDiff > 0 ? homeTeamName : awayTeamName;
                 pickValue = eraDiff > 0 ? `Home ML (${homeTeamAbbr})` : `Away ML (${awayTeamAbbr})`;
-                mlConfidence += eraDiff * 0.1; // [v39] More impact
+                mlConfidence += eraDiff * 0.1; 
                 reasons.push(`${pickTeamName} has a lower ERA (${homeStats.era.toFixed(2)} vs ${awayStats.era.toFixed(2)}).`);
             }
              if (avgDiff !== 0) {
-                mlConfidence += avgDiff * 1.0; // [v39] More impact
+                mlConfidence += avgDiff * 1.0; 
                 reasons.push(`${avgDiff > 0 ? homeTeamName : awayTeamName} boasts a higher team batting average (${homeStats.batting_average.toFixed(3)} vs ${awayStats.batting_average.toFixed(3)}).`);
             }
         }
 
         const finalExplanation = reasons.length > 0 ? reasons.join(' ') : "Based on available stats.";
+        // [v40 Fix] Add small random jitter to confidence to help break ties
+        mlConfidence += (Math.random() - 0.5) * 0.001;
         picks.push({
             game_date: gameDate,
             league: league,
@@ -174,7 +175,7 @@ function generatePicksForGame(game: any, league: string, homeStats: any, awaySta
             pick_type: 'moneyline',
             pick_team: pickTeamName,
             pick_value: pickValue,
-            confidence: Math.min(0.99, Math.max(0.01, mlConfidence)).toFixed(2), // [v39] Wider clamp
+            confidence: Math.min(0.99, Math.max(0.01, mlConfidence)).toFixed(2), 
             explanation: finalExplanation,
         });
     }
@@ -192,7 +193,7 @@ function generatePicksForGame(game: any, league: string, homeStats: any, awaySta
             pickTeamName = winRateDiff > 0 ? homeTeamName : awayTeamName;
             pickTeamAbbr = winRateDiff > 0 ? homeTeamAbbr : awayTeamAbbr;
             spreadValue = winRateDiff > 0 ? '-3.5' : '+3.5'; // Generic placeholder spread
-            spConfidence += winRateDiff * 0.3; // [v39] Adjusted impact
+            spConfidence += winRateDiff * 0.3; 
             reasons.push(`Win rate difference favors ${pickTeamName} (${(homeStats.win_rate * 100).toFixed(1)}% vs ${(awayStats.win_rate * 100).toFixed(1)}%).`);
             if (homeStats.offensive_rating && awayStats.offensive_rating) {
                  const offRatingDiff = homeStats.offensive_rating - awayStats.offensive_rating;
@@ -202,12 +203,13 @@ function generatePicksForGame(game: any, league: string, homeStats: any, awaySta
                  }
             }
         } 
-        // Add similar logic for NHL/MLB spreads if desired
         else {
              reasons.push(`Spread pick based on general stats (Spread value ${spreadValue} is placeholder).`);
         }
 
         const finalExplanation = reasons.join(' ');
+        // [v40 Fix] Add small random jitter to confidence to help break ties
+        spConfidence += (Math.random() - 0.5) * 0.001;
          picks.push({
             game_date: gameDate,
             league: league,
@@ -216,7 +218,7 @@ function generatePicksForGame(game: any, league: string, homeStats: any, awaySta
             pick_type: 'spread',
             pick_team: pickTeamName,
             pick_value: `${pickTeamAbbr} ${spreadValue}`,
-            confidence: Math.min(0.98, Math.max(0.02, spConfidence)).toFixed(2), // [v39] Wider clamp
+            confidence: Math.min(0.98, Math.max(0.02, spConfidence)).toFixed(2), 
             explanation: finalExplanation,
         });
     }
@@ -233,10 +235,9 @@ function generatePicksForGame(game: any, league: string, homeStats: any, awaySta
             const combinedDefRating = (homeStats.defensive_rating || 115) + (awayStats.defensive_rating || 115);
             const avgPace = ((homeStats.pace || 100) + (awayStats.pace || 100)) / 2;
             totalLine = 220.5; // NBA placeholder line
-            // Simple model: Higher off rating/pace suggests Over, higher def rating suggests Under
-            const estimatedTotal = combinedOffRating * (avgPace / 100) - (combinedDefRating - 230) * 0.5; // Basic projection
+            const estimatedTotal = combinedOffRating * (avgPace / 100) - (combinedDefRating - 230) * 0.5; 
             pickValue = estimatedTotal > totalLine ? `Over ${totalLine}` : `Under ${totalLine}`;
-            totConfidence = 0.5 + (estimatedTotal - totalLine) * 0.025; // [v39] Adjusted impact
+            totConfidence = 0.5 + (estimatedTotal - totalLine) * 0.025; 
             reasons.push(`Combined offensive rating (${combinedOffRating.toFixed(1)}) and average pace (${avgPace.toFixed(1)}) point towards ${pickValue}.`);
             if (homeStats.defensive_rating && awayStats.defensive_rating) {
                  reasons.push(`Combined defensive rating is ${combinedDefRating.toFixed(1)}.`);
@@ -246,7 +247,7 @@ function generatePicksForGame(game: any, league: string, homeStats: any, awaySta
             const avgPP = ((homeStats.power_play_efficiency || 0.15) + (awayStats.power_play_efficiency || 0.15)) / 2;
             totalLine = 6.5; // NHL placeholder line
             pickValue = (avgSavePct < 0.905 || avgPP > 0.20) ? `Over ${totalLine}` : `Under ${totalLine}`;
-            totConfidence = 0.5 + (0.905 - avgSavePct) * 4 + (avgPP - 0.20) * 1.5; // [v39] Adjusted impact
+            totConfidence = 0.5 + (0.905 - avgSavePct) * 4 + (avgPP - 0.20) * 1.5; 
             reasons.push(`Average goalie save % (${avgSavePct.toFixed(3)}) ${avgSavePct < 0.905 ? 'favors Over' : 'favors Under'}.`);
             reasons.push(`Average PP efficiency (${(avgPP*100).toFixed(1)}%) ${avgPP > 0.20 ? 'favors Over' : 'favors Under'}.`);
         } else if (league === 'mlb' && homeStats.era !== undefined && awayStats.era !== undefined) {
@@ -254,7 +255,7 @@ function generatePicksForGame(game: any, league: string, homeStats: any, awaySta
             const avgAVG = ((homeStats.batting_average || 0.250) + (awayStats.batting_average || 0.250)) / 2;
             totalLine = 8.5; // MLB placeholder line
             pickValue = (avgERA > 4.2 || avgAVG > 0.260) ? `Over ${totalLine}` : `Under ${totalLine}`;
-            totConfidence = 0.5 + (avgERA - 4.2) * 0.1 + (avgAVG - 0.260) * 2.0; // [v39] Adjusted impact
+            totConfidence = 0.5 + (avgERA - 4.2) * 0.1 + (avgAVG - 0.260) * 2.0; 
             reasons.push(`Average ERA (${avgERA.toFixed(2)}) ${avgERA > 4.2 ? 'favors Over' : 'favors Under'}.`);
             reasons.push(`Average batting average (${avgAVG.toFixed(3)}) ${avgAVG > 0.260 ? 'favors Over' : 'favors Under'}.`);
         }
@@ -264,6 +265,8 @@ function generatePicksForGame(game: any, league: string, homeStats: any, awaySta
         }
 
         const finalExplanation = reasons.join(' ');
+        // [v40 Fix] Add small random jitter to confidence to help break ties
+        totConfidence += (Math.random() - 0.5) * 0.001;
         picks.push({
             game_date: gameDate,
             league: league,
@@ -272,7 +275,7 @@ function generatePicksForGame(game: any, league: string, homeStats: any, awaySta
             pick_type: 'total',
             pick_team: null, 
             pick_value: pickValue,
-            confidence: Math.min(0.98, Math.max(0.02, totConfidence)).toFixed(2), // [v39] Wider clamp
+            confidence: Math.min(0.98, Math.max(0.02, totConfidence)).toFixed(2), 
             explanation: finalExplanation,
         });
     }
@@ -280,27 +283,36 @@ function generatePicksForGame(game: any, league: string, homeStats: any, awaySta
     return picks;
 }
 
-// --- [v39] Helper function to generate Player Prop AI picks (Error Fix) ---
+// --- [v40] Helper function to generate Player Prop AI picks (Error Fix & Logging) ---
 function generatePlayerPropPicks(league: string, playerPropsData: any[]): any[] {
     const picks = [];
     const gameDate = format(new Date(), "yyyy-MM-dd");
+    console.log(`[v40 Player Props - ${league.toUpperCase()}] Starting generation. Received ${playerPropsData.length} raw props.`);
 
     // Simple placeholder: Pick top 5 props based on highest numeric value found
+    let validPropsCount = 0;
     const validProps = playerPropsData.filter(p => {
         // [v39 Fix] Check if prop_value is a string before using match
-        if (typeof p.prop_value !== 'string') return false;
+        if (typeof p.prop_value !== 'string') {
+            // console.log(`[v40 Player Props - ${league.toUpperCase()}] Skipping prop for ${p.player_name}: prop_value is not a string (${typeof p.prop_value})`);
+            return false;
+        }
         const match = p.prop_value.match(/([0-9.]+)/);
-        return match && !isNaN(parseFloat(match[0]));
+        const isValid = match && !isNaN(parseFloat(match[0]));
+        if (isValid) validPropsCount++;
+        // else console.log(`[v40 Player Props - ${league.toUpperCase()}] Skipping prop for ${p.player_name}: Could not parse numeric value from '${p.prop_value}'`);
+        return isValid;
     });
+    console.log(`[v40 Player Props - ${league.toUpperCase()}] Filtered down to ${validPropsCount} props with valid numeric values.`);
 
     const sortedProps = validProps
         .sort((a, b) => parseFloat(b.prop_value.match(/([0-9.]+)/)[0]) - parseFloat(a.prop_value.match(/([0-9.]+)/)[0]))
         .slice(0, 5);
 
-    console.log(`[v39] Found ${validProps.length} valid props, selecting top ${sortedProps.length} for ${league.toUpperCase()}.`);
+    console.log(`[v40 Player Props - ${league.toUpperCase()}] Selected top ${sortedProps.length} props based on value.`);
 
     for (const prop of sortedProps) {
-        const confidence = 0.3 + Math.random() * 0.4; // [v39] Slightly wider random confidence for placeholder
+        const confidence = 0.3 + Math.random() * 0.4; 
         const explanation = `Phase 1 Placeholder: Pick based on prop value. Deeper player analysis requires additional data (e.g., game logs, matchups).`;
         picks.push({
             game_date: gameDate,
@@ -314,6 +326,7 @@ function generatePlayerPropPicks(league: string, playerPropsData: any[]): any[] 
             explanation: explanation,
         });
     }
+    console.log(`[v40 Player Props - ${league.toUpperCase()}] Generated ${picks.length} placeholder picks.`);
     return picks;
 }
 
@@ -329,9 +342,6 @@ serve(async (req) => {
     const balldontlieApiKey = "9047df76-eb37-4f81-8586-f7ae336027dc"; 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    // const currentSeason = 2023; // Not currently used effectively
-    // const nhlSeasonYYYYYYYY = "20232024"; // Not currently used effectively
-    // const nhlGameType = 2; // Not currently used effectively
     const today = format(new Date(), "yyyy-MM-dd");
 
     if (!supabaseUrl || !supabaseServiceRoleKey) {
@@ -360,18 +370,17 @@ serve(async (req) => {
         } else if (statsData) {
             const leagueStatsMap = new Map();
             statsData.forEach(team => {
-                // [v39 Fix] Use abbreviation directly as key, handle potential nulls
-                const teamKey = team.team_name?.match(/\(([^)]+)\)/)?.[1]?.toUpperCase(); 
+                // [v40 Fix] More robust key extraction
+                let teamKey = team.team_name?.match(/\(([^)]+)\)/)?.[1]?.toUpperCase(); 
+                if (!teamKey && team.team_name) { // Fallback if abbr missing in name
+                    teamKey = team.team_name.toUpperCase(); // Use full name as key if no abbr
+                    console.warn(`[v40 Stats Load - ${league.toUpperCase()}] Missing abbr in name '${team.team_name}', using name as key.`);
+                }
+                
                 if (teamKey) {
                     leagueStatsMap.set(teamKey, team);
                 } else {
-                    console.warn(`[v39] Could not determine abbreviation key for team: ${team.team_name} in ${league}`);
-                    // Fallback: Try using full name if abbr fails
-                    const fallbackKey = team.team_name?.toUpperCase();
-                    if (fallbackKey && !fallbackKey.includes('(')) { // Avoid using the name if it still has abbr
-                         leagueStatsMap.set(fallbackKey, team);
-                         console.log(`[v39] Using fallback key: ${fallbackKey}`);
-                    }
+                    console.warn(`[v40 Stats Load - ${league.toUpperCase()}] Could not determine key for team: ${JSON.stringify(team)}`);
                 }
             });
             allTeamStats.set(league, leagueStatsMap);
@@ -379,8 +388,8 @@ serve(async (req) => {
         }
     }
 
-    // --- [v39] Fetch Schedules and Generate AI Picks --- 
-    console.log("--- Starting AI Picks Generation (Phase 1 - v39 Fixes) ---");
+    // --- [v40] Fetch Schedules and Generate AI Picks --- 
+    console.log("--- Starting AI Picks Generation (Phase 1 - v40 Fixes) ---");
     let allGeneratedPicks: any[] = [];
     try {
         // --- NBA Schedule & Team Picks ---
@@ -391,7 +400,6 @@ serve(async (req) => {
         const nbaGames = await fetchAllPaginatedData(nbaScheduleUrl, balldontlieApiKey);
         console.log(`Fetched ${nbaGames.length} NBA games for today.`);
         for (const game of nbaGames) {
-            // [v39 Fix] Ensure keys are consistently uppercase abbreviations
             const homeTeamKey = game.home_team?.abbreviation?.toUpperCase();
             const awayTeamKey = game.visitor_team?.abbreviation?.toUpperCase(); 
             if (homeTeamKey && awayTeamKey) {
@@ -401,10 +409,10 @@ serve(async (req) => {
                     const gamePicks = generatePicksForGame(game, 'nba', homeStats, awayStats);
                     allGeneratedPicks = allGeneratedPicks.concat(gamePicks);
                 } else {
-                    console.warn(`[v39] Missing stats for NBA game: ${awayTeamKey} @ ${homeTeamKey}. Check stats table keys.`);
+                    console.warn(`[v40 Picks - NBA] Missing stats for game: ${awayTeamKey} @ ${homeTeamKey}. Home found: ${!!homeStats}, Away found: ${!!awayStats}.`);
                 }
             } else {
-                 console.warn(`[v39] Missing team abbreviation in NBA game data: ${JSON.stringify(game)}`);
+                 console.warn(`[v40 Picks - NBA] Missing team abbreviation in game data: ${JSON.stringify(game)}`);
             }
         }
 
@@ -425,10 +433,10 @@ serve(async (req) => {
                     const gamePicks = generatePicksForGame(game, 'mlb', homeStats, awayStats); 
                     allGeneratedPicks = allGeneratedPicks.concat(gamePicks);
                 } else {
-                     console.warn(`[v39] Missing stats for MLB game: ${awayTeamKey} @ ${homeTeamKey}. Check stats table keys.`);
+                     console.warn(`[v40 Picks - MLB] Missing stats for game: ${awayTeamKey} @ ${homeTeamKey}. Home found: ${!!homeStats}, Away found: ${!!awayStats}.`);
                 }
             } else {
-                 console.warn(`[v39] Missing team abbreviation in MLB game data: ${JSON.stringify(game)}`);
+                 console.warn(`[v40 Picks - MLB] Missing team abbreviation in game data: ${JSON.stringify(game)}`);
             }
         }
 
@@ -440,31 +448,43 @@ serve(async (req) => {
         const nhlGames = nhlScheduleData?.gameWeek?.[0]?.games || [];
         console.log(`Fetched ${nhlGames.length} NHL games for today.`);
         for (const game of nhlGames) {
-             // [v39 Fix] Ensure keys are consistently uppercase abbreviations
              const homeTeamKey = game.homeTeam?.abbrev?.toUpperCase();
              const awayTeamKey = game.awayTeam?.abbrev?.toUpperCase();
              if (homeTeamKey && awayTeamKey) {
-                const homeStats = nhlTeamStatsMap.get(homeTeamKey);
-                const awayStats = nhlTeamStatsMap.get(awayTeamKey);
+                // [v40 Fix] Attempt fallback to full name if abbreviation lookup fails
+                let homeStats = nhlTeamStatsMap.get(homeTeamKey);
+                let awayStats = nhlTeamStatsMap.get(awayTeamKey);
+                if (!homeStats) {
+                    const homeNameKey = game.homeTeam?.name?.default?.toUpperCase();
+                    if (homeNameKey) homeStats = nhlTeamStatsMap.get(homeNameKey);
+                    if (homeStats) console.log(`[v40 Picks - NHL] Used fallback name key '${homeNameKey}' for home team.`);
+                }
+                 if (!awayStats) {
+                    const awayNameKey = game.awayTeam?.name?.default?.toUpperCase();
+                    if (awayNameKey) awayStats = nhlTeamStatsMap.get(awayNameKey);
+                     if (awayStats) console.log(`[v40 Picks - NHL] Used fallback name key '${awayNameKey}' for away team.`);
+                }
+
                 if (homeStats && awayStats) {
                     const gamePicks = generatePicksForGame(game, 'nhl', homeStats, awayStats);
                     allGeneratedPicks = allGeneratedPicks.concat(gamePicks);
                 } else {
-                     console.warn(`[v39] Missing stats for NHL game: ${awayTeamKey} @ ${homeTeamKey}. Check stats table keys.`);
+                     console.warn(`[v40 Picks - NHL] Missing stats for game: ${awayTeamKey} @ ${homeTeamKey}. Home found: ${!!homeStats}, Away found: ${!!awayStats}.`);
                 }
             } else {
-                 console.warn(`[v39] Missing team abbreviation in NHL game data: ${JSON.stringify(game)}`);
+                 console.warn(`[v40 Picks - NHL] Missing team abbreviation in game data: ${JSON.stringify(game)}`);
             }
         }
 
-        // --- [v39] Generate Player Prop Picks (Error Fix) ---
-        for (const league of leagues) {
+        // --- [v40] Generate Player Prop Picks (Error Fix & Logging, NHL Removed) ---
+        const propLeagues = ['nba', 'mlb']; // [v40] Removed NHL
+        for (const league of propLeagues) {
             const playerPropsTable = `${league}_player_props`;
             console.log(`Fetching player props from ${playerPropsTable} for AI picks...`);
             const { data: propsData, error: propsError } = await supabase
                 .from(playerPropsTable)
                 .select('player_name, team, prop_type, prop_value')
-                .limit(200); // Fetch more props to increase chance of getting valid ones
+                .limit(500); // Fetch more props
             
             if (propsError) {
                 console.error(`Error fetching player props for ${league}:`, propsError);
@@ -472,10 +492,8 @@ serve(async (req) => {
                 try {
                     const playerPicks = generatePlayerPropPicks(league, propsData);
                     allGeneratedPicks = allGeneratedPicks.concat(playerPicks);
-                    console.log(`Generated ${playerPicks.length} placeholder player prop picks for ${league.toUpperCase()}.`);
                 } catch (propGenError) {
-                     console.error(`[v39] Error during player prop pick generation for ${league}:`, propGenError.message);
-                     // Continue with other leagues even if one fails
+                     console.error(`[v40] Error during player prop pick generation for ${league}:`, propGenError.message);
                 }
             } else {
                  console.log(`No player props found in ${playerPropsTable} to generate picks.`);
@@ -484,7 +502,7 @@ serve(async (req) => {
 
         // --- Upsert Generated Picks ---
         if (allGeneratedPicks.length > 0) {
-            console.log(`[v39] Attempting to upsert ${allGeneratedPicks.length} AI picks...`);
+            console.log(`[v40] Attempting to upsert ${allGeneratedPicks.length} AI picks...`);
             // Delete old picks for today first
             const { error: deleteError } = await supabase
                 .from('ai_picks')
@@ -492,7 +510,6 @@ serve(async (req) => {
                 .eq('game_date', today);
             if (deleteError) {
                 console.error("Error deleting old AI picks:", deleteError);
-                // Don't stop, try upserting anyway
             } else {
                 console.log(`Deleted old picks for ${today}.`);
             }
@@ -502,18 +519,17 @@ serve(async (req) => {
                 .from("ai_picks")
                 .upsert(allGeneratedPicks);
             if (picksUpsertError) {
-                 console.error("[v39] AI Picks upsert error:", picksUpsertError);
-                 throw picksUpsertError; // Throw error to indicate failure
+                 console.error("[v40] AI Picks upsert error:", picksUpsertError);
+                 throw picksUpsertError; 
             } else {
-                console.log("[v39] Successfully upserted AI picks.");
+                console.log("[v40] Successfully upserted AI picks.");
             }
         } else {
-            console.log("[v39] No AI picks were generated for today.");
+            console.log("[v40] No AI picks were generated for today.");
         }
 
     } catch (picksError) {
-        console.error("[v39] AI Picks generation/upsert block error:", picksError.message);
-        // Log the error but allow the rest of the function (stats updates) to proceed
+        console.error("[v40] AI Picks generation/upsert block error:", picksError.message);
     }
     console.log("--- Finished AI Picks Generation ---");
 
@@ -527,29 +543,28 @@ serve(async (req) => {
         const allTeams = await fetchAllPaginatedData(nbaTeamsUrl, balldontlieApiKey);
         
         // Fetch actual NBA team stats/standings (replace placeholder)
-        // [v39] Using placeholder stats for now - real stats fetching needs implementation
+        // [v40] Using placeholder stats for now - real stats fetching needs implementation
         const teamStatsMap = new Map(); 
         allTeams.forEach(team => {
             teamStatsMap.set(team.id, {
                 win_rate: Math.random() * 0.6 + 0.2, 
                 pace: 95 + Math.random() * 10, 
                 offensive_rating: 105 + Math.random() * 10, 
-                defensive_rating: 105 + Math.random() * 10, // Added placeholder def rating
+                defensive_rating: 105 + Math.random() * 10, 
                 recent_form: "W-L-W-L-W" 
             });
         });
 
         const teamsToUpsert = allTeams.map((team: any) => {
           const stats = teamStatsMap.get(team.id) || {};
-          // [v39] Ensure team_name format matches key used in stats map
           const teamAbbr = team.abbreviation?.toUpperCase();
           const teamName = team.full_name;
           return {
-            team_name: `${teamName} (${teamAbbr})`, // Consistent format
+            team_name: `${teamName} (${teamAbbr})`, 
             win_rate: stats.win_rate || 0.5,
             pace: stats.pace || 100.0,
             offensive_rating: stats.offensive_rating || 110.0,
-            defensive_rating: stats.defensive_rating || 115.0, // Added placeholder def rating
+            defensive_rating: stats.defensive_rating || 115.0, 
             recent_form: stats.recent_form || "N/A"
           };
         });
@@ -572,19 +587,18 @@ serve(async (req) => {
         const nhlTeamsToUpsert: any[] = [];
         if (nhlStandingsData?.standings) {
             nhlStandingsData.standings.forEach((standing: any) => {
-                 // [v39] Ensure team_name format matches key used in stats map
                 const teamAbbr = standing.teamAbbrev?.default?.toUpperCase();
                 const teamName = standing.teamName?.default;
                 if (teamName && teamAbbr) {
                     nhlTeamsToUpsert.push({
-                        team_name: `${teamName} (${teamAbbr})`, // Consistent format
-                        puck_line_trend: "L10: 6-4", // Placeholder
-                        goalie_name: "Goalie Name", // Placeholder
-                        goalie_save_percentage: 0.900 + Math.random() * 0.03, // Placeholder
-                        power_play_efficiency: 0.15 + Math.random() * 0.1 // Placeholder
+                        team_name: `${teamName} (${teamAbbr})`, 
+                        puck_line_trend: "L10: 6-4", 
+                        goalie_name: "Goalie Name", 
+                        goalie_save_percentage: 0.900 + Math.random() * 0.03, 
+                        power_play_efficiency: 0.15 + Math.random() * 0.1 
                     });
                 } else {
-                    console.warn(`[v39] Missing name/abbr for NHL standing: ${JSON.stringify(standing)}`);
+                    console.warn(`[v40 Stats Update - NHL] Missing name/abbr for standing: ${JSON.stringify(standing)}`);
                 }
             });
         }
@@ -606,11 +620,11 @@ serve(async (req) => {
         const mlbTeamsUrl = `${mlbBaseUrl}/teams`;
         const allMlbTeams = await fetchAllPaginatedData(mlbTeamsUrl, balldontlieApiKey);
 
-        // [v39] Using placeholder stats for now - real stats fetching needs implementation
+        // [v40] Using placeholder stats for now - real stats fetching needs implementation
         const mlbTeamStatsMap = new Map();
         allMlbTeams.forEach(team => {
             mlbTeamStatsMap.set(team.id, {
-                win_loss_record: `${Math.floor(Math.random() * 10 + 5)}-${Math.floor(Math.random() * 10 + 5)}`, // Placeholder
+                win_loss_record: `${Math.floor(Math.random() * 10 + 5)}-${Math.floor(Math.random() * 10 + 5)}`, 
                 era: (3.5 + Math.random() * 1.5).toFixed(2),
                 batting_average: (0.240 + Math.random() * 0.03).toFixed(3)
             });
@@ -618,11 +632,10 @@ serve(async (req) => {
 
         const mlbTeamsToUpsert = allMlbTeams.map((team: any) => {
             const stats = mlbTeamStatsMap.get(team.id) || {};
-            // [v39] Ensure team_name format matches key used in stats map
             const teamAbbr = team.abbreviation?.toUpperCase();
-            const teamName = team.name; // MLB API uses name
+            const teamName = team.name; 
             return {
-                team_name: `${teamName} (${teamAbbr})`, // Consistent format
+                team_name: `${teamName} (${teamAbbr})`, 
                 win_loss_record: stats.win_loss_record || "0-0",
                 era: stats.era || 4.00,
                 batting_average: stats.batting_average || 0.250
