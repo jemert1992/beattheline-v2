@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 
-console.log("Initializing update-sports-data function");
+console.log("Initializing update-sports-data function (v27)");
 
 // --- Helper Function to fetch paginated data ---
 async function fetchAllPaginatedData(url: string, apiKey: string) {
@@ -33,7 +33,6 @@ async function fetchAllPaginatedData(url: string, apiKey: string) {
         allData = allData.concat(pageData.data);
     } else {
         console.warn(`Received non-array data on page ${page} for ${url.split("?")[0]}, stopping pagination.`);
-        // Optionally break or handle differently if partial data is acceptable
         break; 
     }
     nextCursor = pageData.meta?.next_cursor;
@@ -98,15 +97,14 @@ serve(async (req) => {
         const allTeams = await fetchAllPaginatedData(nbaTeamsUrl, balldontlieApiKey);
         console.log(`Fetched ${allTeams.length} NBA teams basic info.`);
 
-        // 2. Fetch Team Standings (for Win Rate)
-        // TODO: Find the correct endpoint for team standings/stats if this isn't it
+        // 2. Fetch Team Standings (Placeholder)
         const teamStatsMap = new Map(); 
-        console.log("Placeholder: Need to implement actual team stats/standings fetch.");
+        console.log("Placeholder: Need to implement actual NBA team stats/standings fetch.");
         allTeams.forEach(team => {
             teamStatsMap.set(team.id, {
-                win_rate: Math.random() * 0.6 + 0.2, // Random placeholder
-                pace: 95 + Math.random() * 10, // Random placeholder
-                offensive_rating: 105 + Math.random() * 10, // Random placeholder
+                win_rate: Math.random() * 0.6 + 0.2, // Placeholder
+                pace: 95 + Math.random() * 10, // Placeholder
+                offensive_rating: 105 + Math.random() * 10, // Placeholder
                 recent_form: "W-L-W-L-W" // Placeholder
             });
         });
@@ -134,20 +132,17 @@ serve(async (req) => {
           console.log("No NBA team data to upsert.");
         }
 
-        // 4. Fetch Player Season Averages (General Base Stats)
+        // 4. Fetch Player Season Averages
         const playerAveragesUrl = `https://api.balldontlie.io/v1/season_averages/general?season=${currentSeason}&season_type=regular&type=base`;
         const allPlayerAverages = await fetchAllPaginatedData(playerAveragesUrl, balldontlieApiKey);
         console.log(`Fetched ${allPlayerAverages.length} NBA player season averages.`);
 
         // 5. Process and Upsert Player Props/Stats
-        if (allPlayerAverages && allPlayerAverages.length > 0) { // Check if array exists and is not empty
-            // console.log("Sample Player Average Data:", JSON.stringify(allPlayerAverages[0], null, 2)); // Removed for brevity
+        if (allPlayerAverages && allPlayerAverages.length > 0) {
             const playerStatsToUpsert = allPlayerAverages.map((avg: any) => ({
-                // Safely access player and team data
                 player_name: `${avg.player?.first_name ?? 'Unknown'} ${avg.player?.last_name ?? 'Player'}`, 
                 team: avg.player?.team?.abbreviation ?? 'N/A',
                 prop_type: 'Season Avg Pts',
-                // Safely access stats data
                 prop_value: avg.stats?.pts ?? 0,
                 analysis: `Avg ${avg.stats?.pts ?? 0} pts in ${avg.stats?.games_played ?? 0} games.`,
                 confidence: 3,
@@ -169,37 +164,26 @@ serve(async (req) => {
 
     // --- Fetch NHL Data ---
     console.log("--- Starting NHL Data Fetch ---");
-    
     try {
-      // Define the NHL season and game type to fetch
-      const nhlSeasonYYYYYYYY = "20232024"; // YYYYYYYY format
-      const nhlGameType = 2; // 2 for regular season
-      // 1. Fetch NHL Standings for team records
-      const nhlStandings = await fetchNhlData('/v1/standings/now');
-      console.log(`Fetched NHL standings with ${nhlStandings.standings?.length || 0} teams.`);
+      const nhlSeasonYYYYYYYY = "20232024";
+      const nhlGameType = 2;
       
-      // 2. Fetch NHL Goalie Stats Leaders for the specified season
-      const nhlGoalieStats = await fetchNhlData(`/v1/goalie-stats-leaders/${nhlSeasonYYYYYYYY}/${nhlGameType}`);
-      console.log(`Fetched NHL goalie stats for ${nhlSeasonYYYYYYYY} with ${nhlGoalieStats.goalieStatLeaders?.length || 0} categories.`);
+      // 1. Fetch NHL Standings
+      const nhlStandingsData = await fetchNhlData('/v1/standings/now');
+      console.log(`Fetched NHL standings with ${nhlStandingsData.standings?.length || 0} teams.`);
       
-      // 3. Process and map NHL team data for upsert
+      // 2. Fetch NHL Goalie Stats Leaders
+      const nhlGoalieStatsData = await fetchNhlData(`/v1/goalie-stats-leaders/${nhlSeasonYYYYYYYY}/${nhlGameType}`);
+      console.log(`Fetched NHL goalie stats for ${nhlSeasonYYYYYYYY} with ${nhlGoalieStatsData.goalieStatLeaders?.length || 0} categories.`);
+      
+      // 3. Process and map NHL team data
       const nhlTeamsToUpsert = [];
-      
-      if (nhlStandings.standings && nhlStandings.standings.length > 0) {
-        for (const team of nhlStandings.standings) {
-          let goalieData = null;
-          // Safely access goalie stats
-          if (nhlGoalieStats.goalieStatLeaders && nhlGoalieStats.goalieStatLeaders.length > 0) {
-            const savePctCategory = nhlGoalieStats.goalieStatLeaders.find(
-              (category: any) => category.category === 'savePct'
-            );
-            if (savePctCategory && savePctCategory.leaders && savePctCategory.leaders.length > 0) {
-              goalieData = savePctCategory.leaders.find(
-                (goalie: any) => goalie.teamAbbrev === team.teamAbbrev
-              );
-            }
-          }
-          
+      if (nhlStandingsData.standings && nhlStandingsData.standings.length > 0) {
+        const savePctCategory = nhlGoalieStatsData.goalieStatLeaders?.find((cat: any) => cat.category === 'savePct');
+        const goalieLeadersMap = new Map(savePctCategory?.leaders?.map((g: any) => [g.teamAbbrev, g]) || []);
+
+        for (const team of nhlStandingsData.standings) {
+          const goalieData = goalieLeadersMap.get(team.teamAbbrev);
           nhlTeamsToUpsert.push({
             team_name: `${team.teamName?.default ?? 'Unknown Team'} (${team.teamAbbrev ?? 'N/A'})`,
             puck_line_trend: team.streakCode || 'N/A',
@@ -223,34 +207,36 @@ serve(async (req) => {
       }
       
       // 5. Process and map NHL player data for props
-      const nhlPlayerPropsToUpsert = [];
+      const nhlPlayerPropsMap = new Map(); // Use Map for uniqueness
+      const nhlSkaterStatsData = await fetchNhlData(`/v1/skater-stats-leaders/${nhlSeasonYYYYYYYY}/${nhlGameType}`);
+      console.log(`Fetched NHL skater stats with ${nhlSkaterStatsData.categories?.length || 0} categories.`);
       
-      // Fetch skater stats for points, goals, etc.
-      const nhlSkaterStats = await fetchNhlData(`/v1/skater-stats-leaders/${nhlSeasonYYYYYYYY}/${nhlGameType}`);
-      console.log(`Fetched NHL skater stats with ${nhlSkaterStats.categories?.length || 0} categories.`);
-      
-      // Safely access skater stats
-      if (nhlSkaterStats.categories && nhlSkaterStats.categories.length > 0) {
-        for (const category of nhlSkaterStats.categories) {
+      if (nhlSkaterStatsData.categories && nhlSkaterStatsData.categories.length > 0) {
+        for (const category of nhlSkaterStatsData.categories) {
           if (category.leaders && category.leaders.length > 0) {
-            // Limit processing to top 10 leaders per category for brevity
-            for (const player of category.leaders.slice(0, 10)) {
-              nhlPlayerPropsToUpsert.push({
-                player_name: `${player.firstName ?? ''} ${player.lastName ?? ''}`.trim(),
+            for (const player of category.leaders.slice(0, 10)) { // Limit to top 10
+              const playerName = `${player.firstName ?? ''} ${player.lastName ?? ''}`.trim();
+              const propType = `Season ${category.categoryLabel ?? 'Stat'}`;
+              const uniqueKey = `${playerName}-${propType}`;
+              
+              const propData = {
+                player_name: playerName,
                 team: player.teamAbbrev ?? 'N/A',
-                prop_type: `Season ${category.categoryLabel ?? 'Stat'}`, // Use categoryLabel safely
+                prop_type: propType,
                 prop_value: player.value ?? 0,
                 analysis: `${player.value ?? 0} ${category.categoryLabel?.toLowerCase() ?? 'stat'} in ${player.gamesPlayed ?? 0} games.`,
-                confidence: Math.min(5, Math.ceil((player.value ?? 0) / 10)), // Calculate confidence safely
-              });
+                confidence: Math.min(5, Math.ceil((player.value ?? 0) / 10)),
+              };
+              nhlPlayerPropsMap.set(uniqueKey, propData); // Add/overwrite in Map
             }
           }
         }
       }
+      const nhlPlayerPropsToUpsert = Array.from(nhlPlayerPropsMap.values());
       
       // 6. Upsert NHL Player Props
       if (nhlPlayerPropsToUpsert.length > 0) {
-        console.log(`Upserting ${nhlPlayerPropsToUpsert.length} NHL player props...`);
+        console.log(`Upserting ${nhlPlayerPropsToUpsert.length} unique NHL player props...`);
         const { error: nhlPlayerUpsertError } = await supabase
           .from("nhl_player_props")
           .upsert(nhlPlayerPropsToUpsert, { onConflict: "player_name, prop_type" });
@@ -263,222 +249,185 @@ serve(async (req) => {
     } catch (nhlError) {
       console.error("NHL data fetch/process error:", nhlError.message);
     }
-    
     console.log("--- Finished NHL Data Fetch ---");
 
-    // --- Fetch MLB Data ---
-    console.log("--- Starting MLB Data Fetch ---");
+    // --- Fetch MLB Data (v27 Fixes) ---
+    console.log("--- Starting MLB Data Fetch (v27) ---");
     const mlbBaseUrl = "https://api.balldontlie.io/mlb/v1";
     try {
-      // 1. Fetch MLB Teams
+      // 1. Fetch MLB Teams (Definitive List) - Key by ABBREVIATION
       const mlbTeamsUrl = `${mlbBaseUrl}/teams`;
       const allMlbTeams = await fetchAllPaginatedData(mlbTeamsUrl, balldontlieApiKey);
       console.log(`Fetched ${allMlbTeams.length} MLB teams basic info.`);
-      const mlbTeamMap = new Map(allMlbTeams.map(team => [team.id, team]));
+      // Use ABBREVIATION as the key, ensure it exists and is consistent
+      const mlbTeamMap = new Map(); 
+      allMlbTeams.forEach(team => {
+          const abbreviation = team.abbreviation?.trim().toUpperCase(); // Normalize key
+          if (abbreviation) {
+              mlbTeamMap.set(abbreviation, team);
+          } else {
+              console.warn(`MLB Team ID ${team.id} missing abbreviation, skipping.`);
+          }
+      });
+      console.log(`Created MLB team map with ${mlbTeamMap.size} entries keyed by abbreviation.`);
 
-      // 2. Fetch MLB Team Standings (Requires ALL-STAR tier)
-      const mlbStandingsUrl = `${mlbBaseUrl}/standings?season=2023`; // Use 2023 season
+      // 2. Fetch MLB Team Standings - Key by ABBREVIATION
+      const mlbStandingsUrl = `${mlbBaseUrl}/standings?season=${currentSeason}`;
       const allMlbStandings = await fetchAllPaginatedData(mlbStandingsUrl, balldontlieApiKey);
       console.log(`Fetched ${allMlbStandings.length} MLB team standings entries.`);
+      // Create a map for quick lookup of standings by ABBREVIATION
+      const mlbStandingsMap = new Map();
+      allMlbStandings.forEach(standing => {
+          // Find the corresponding team abbreviation from the /teams data using team_id
+          const teamInfo = allMlbTeams.find(t => t.id === standing.team_id);
+          const abbreviation = teamInfo?.abbreviation?.trim().toUpperCase(); // Normalize key
+          if (abbreviation) {
+              mlbStandingsMap.set(abbreviation, standing);
+          } else {
+              console.warn(`MLB Standing for team_id ${standing.team_id} could not be mapped to an abbreviation, skipping.`);
+          }
+      });
+       console.log(`Created MLB standings map with ${mlbStandingsMap.size} entries keyed by abbreviation.`);
 
-      // 3. Fetch MLB Player Season Stats (Requires GOAT tier)
+      // 3. Fetch MLB Player Season Stats
       const mlbPlayerStatsUrl = `${mlbBaseUrl}/season_stats?season=${currentSeason}`;
       const allMlbPlayerStats = await fetchAllPaginatedData(mlbPlayerStatsUrl, balldontlieApiKey);
       console.log(`Fetched ${allMlbPlayerStats.length} MLB player season stats entries.`);
 
-      // 4. Aggregate Player Stats by Team to calculate ERA and AVG
+      // 4. Aggregate Player Stats by Team ABBREVIATION
       const teamAggregatedStats = new Map();
-      // Check if allMlbPlayerStats exists and is an array
       if (allMlbPlayerStats && Array.isArray(allMlbPlayerStats)) {
-          console.log("Starting MLB player stats aggregation..."); 
+          console.log("Starting MLB player stats aggregation by abbreviation..."); 
           for (const stats of allMlbPlayerStats) {
-            // *** CORRECTED: Use stats.player.team.id ***
-            const teamId = stats.player?.team?.id; 
-            
-            // Safely access team id
-            if (!teamId) {
-                // console.log("[MLB Aggregation] Skipping player due to missing team ID."); // Removed diagnostic log
-                continue; // Skip players without a team ID
-            }
+            // Use ABBREVIATION from player.team object as the key
+            const teamAbbreviation = stats.player?.team?.abbreviation?.trim().toUpperCase(); // Normalize key
+            if (!teamAbbreviation) continue; // Skip players without a team abbreviation
 
-            if (!teamAggregatedStats.has(teamId)) {
-              teamAggregatedStats.set(teamId, {
+            if (!teamAggregatedStats.has(teamAbbreviation)) {
+              teamAggregatedStats.set(teamAbbreviation, {
                 total_hits: 0,
                 total_at_bats: 0,
                 total_earned_runs: 0,
                 total_innings_pitched: 0.0,
               });
             }
-            const teamStats = teamAggregatedStats.get(teamId);
-
-            // Aggregate batting stats safely using correct field names
-            teamStats.total_hits += stats.batting_h ?? 0; 
-            teamStats.total_at_bats += stats.batting_ab ?? 0; 
-
-            // Aggregate pitching stats safely (ensure values are numbers) using correct field names
-            const earnedRuns = parseFloat(stats.pitching_er); 
-            const inningsPitched = parseFloat(stats.pitching_ip); 
-            if (!isNaN(earnedRuns)) {
-                teamStats.total_earned_runs += earnedRuns;
-            }
-            if (!isNaN(inningsPitched)) {
-                teamStats.total_innings_pitched += inningsPitched;
-            }
+            const teamStats = teamAggregatedStats.get(teamAbbreviation);
+            teamStats.total_hits += stats.batting_h ?? 0;
+            teamStats.total_at_bats += stats.batting_ab ?? 0;
+            // Ensure correct parsing and handling of potential non-numeric values
+            const earnedRuns = parseFloat(stats.pitching_er);
+            const inningsPitched = parseFloat(stats.pitching_ip);
+            if (!isNaN(earnedRuns)) teamStats.total_earned_runs += earnedRuns;
+            if (!isNaN(inningsPitched)) teamStats.total_innings_pitched += inningsPitched;
           }
           console.log("Finished MLB player stats aggregation loop."); 
       } else {
           console.warn("No valid MLB player stats data found for aggregation.");
       }
-      console.log(`Aggregated stats for ${teamAggregatedStats.size} MLB teams.`);
+      console.log(`Aggregated stats for ${teamAggregatedStats.size} MLB teams keyed by abbreviation.`);
 
-      // 5. Data already fetched in step 2
+      // 5. Combine Team Info, Standings, and Aggregated Stats (Iterate over UNIQUE abbreviations)
+      const finalMlbTeamsToUpsert = [];
+      console.log("Starting MLB team data combination (iterating over unique abbreviations)...");
+      for (const teamAbbreviation of mlbTeamMap.keys()) { // Iterate over unique abbreviations from /teams
+          const teamInfo = mlbTeamMap.get(teamAbbreviation);
+          const standing = mlbStandingsMap.get(teamAbbreviation); // Find corresponding standing by abbreviation
+          const aggregated = teamAggregatedStats.get(teamAbbreviation); // Find corresponding aggregated stats by abbreviation
 
-      // 6. Combine Standings and Aggregated Stats, Ensure Uniqueness
-      const finalMlbTeamsToUpsertMap = new Map();
-      // Check if allMlbStandings exists and is an array
-      if (allMlbStandings && Array.isArray(allMlbStandings)) {
-          console.log("Starting MLB standings combination..."); 
-          for (const standing of allMlbStandings) {
-            const teamInfo = mlbTeamMap.get(standing.team_id);
-            if (!teamInfo) {
-                // console.log(`[MLB Combine] Skipping standing for team_id ${standing.team_id} - teamInfo not found in mlbTeamMap.`); // Removed diagnostic log
-                continue; 
-            }
+          // If we don't have basic info, skip (shouldn't happen if iterating map keys)
+          if (!teamInfo) continue; 
 
-            const teamName = `${teamInfo.display_name ?? 'Unknown'} (${teamInfo.abbreviation ?? 'N/A'})`;
-            const aggregated = teamAggregatedStats.get(standing.team_id);
-            
-            // Calculate ERA and AVG
-            let teamBattingAverage = null;
-            if (aggregated && aggregated.total_at_bats > 0) {
-              teamBattingAverage = aggregated.total_hits / aggregated.total_at_bats;
-            }
-
-            let teamEra = null;
-            if (aggregated && aggregated.total_innings_pitched > 0) {
-              teamEra = (aggregated.total_earned_runs / aggregated.total_innings_pitched) * 9;
-            }
-
-            finalMlbTeamsToUpsertMap.set(teamName, {
-              team_name: teamName,
-              win_loss_record: `${standing.wins ?? 0}-${standing.losses ?? 0}`,
-              batting_average: teamBattingAverage !== null ? parseFloat(teamBattingAverage.toFixed(3)) : null,
-              era: teamEra !== null ? parseFloat(teamEra.toFixed(2)) : null,
-            });
+          const teamName = `${teamInfo.display_name ?? 'Unknown'} (${teamInfo.abbreviation ?? 'N/A'})`;
+          
+          // Calculate ERA and AVG safely
+          let era = null;
+          let batting_average = null;
+          if (aggregated) {
+              if (aggregated.total_innings_pitched > 0) {
+                  era = (aggregated.total_earned_runs * 9) / aggregated.total_innings_pitched;
+              }
+              if (aggregated.total_at_bats > 0) {
+                  batting_average = aggregated.total_hits / aggregated.total_at_bats;
+              }
           }
-          console.log("Finished MLB standings combination loop."); 
-      } else {
-          console.warn("No valid MLB standings data found for processing.");
+
+          const teamData = {
+              team_name: teamName, // Unique constraint field
+              wins: standing?.wins ?? 0, // Use standing data if found
+              losses: standing?.losses ?? 0, // Use standing data if found
+              era: era, // Use calculated ERA if possible
+              batting_average: batting_average, // Use calculated AVG if possible
+          };
+          finalMlbTeamsToUpsert.push(teamData);
+          // console.log(`Prepared team: ${teamName}, Wins: ${teamData.wins}, ERA: ${teamData.era}, AVG: ${teamData.batting_average}`); // Optional detailed log
       }
+      console.log(`Prepared ${finalMlbTeamsToUpsert.length} unique MLB teams for upsert.`);
 
-      const finalMlbTeamsToUpsert = Array.from(finalMlbTeamsToUpsertMap.values());
-
-      // 7. Upsert Combined MLB Team Stats
+      // 6. Upsert MLB Team Stats
       if (finalMlbTeamsToUpsert.length > 0) {
-        console.log(`Upserting ${finalMlbTeamsToUpsert.length} unique MLB teams stats with aggregated ERA/AVG...`);
+        console.log(`Upserting ${finalMlbTeamsToUpsert.length} MLB teams...`);
         const { error: mlbTeamUpsertError } = await supabase
           .from("mlb_team_stats")
           .upsert(finalMlbTeamsToUpsert, { onConflict: "team_name" });
         if (mlbTeamUpsertError) throw mlbTeamUpsertError;
-        console.log("Successfully upserted combined MLB team stats.");
+        console.log("Successfully upserted MLB team data.");
       } else {
         console.log("No combined MLB team stats to upsert.");
       }
 
-      // 8. Process and Upsert MLB Player Props
-      const mlbPlayerPropsToUpsert = [];
-      // Add check for allMlbPlayerStats existence and length
-      if (allMlbPlayerStats && allMlbPlayerStats.length > 0) {
-        // console.log("Sample MLB Player Stat Data (v25):", JSON.stringify(allMlbPlayerStats[0], null, 2)); // Removed diagnostic log
-        for (const stats of allMlbPlayerStats) {
-          // Defensive check: Ensure stats and stats.player exist before accessing properties
-          if (!stats || !stats.player) {
-            console.warn("Skipping MLB player stat record due to missing player data:", stats);
-            continue; // Skip this iteration if essential player data is missing
-          }
+      // 7. Process and Prepare MLB Player Props using a Map for uniqueness
+      const finalMlbPlayerPropsMap = new Map(); // Use Map for uniqueness
+      if (allMlbPlayerStats && Array.isArray(allMlbPlayerStats)) {
+          console.log("Starting MLB player prop processing...");
+          for (const stats of allMlbPlayerStats) {
+              const player = stats.player;
+              if (!player) continue; // Skip if no player info
 
-          // Safely access player name parts using nullish coalescing
-          const playerName = `${stats.player.first_name ?? 'Unknown'} ${stats.player.last_name ?? 'Player'}`;
-          
-          // *** CORRECTED: Use stats.player.team.abbreviation ***
-          const teamAbbr = stats.player?.team?.abbreviation ?? 'N/A';
+              const playerName = `${player.first_name ?? 'Unknown'} ${player.last_name ?? 'Player'}`.trim();
+              const teamAbbreviation = player.team?.abbreviation?.trim().toUpperCase() ?? 'N/A';
 
-          // Use nullish coalescing for games played/pitched in analysis strings
-          const gamesPlayed = stats.batting_gp ?? 0; // Use correct field name
-          const gamesPitched = stats.pitching_gp ?? 0; // Use correct field name
-          const gamesPlayedOrPitched = gamesPitched > 0 ? gamesPitched : gamesPlayed;
+              // Define props to extract
+              const props = {
+                  'AVG': (stats.batting_ab ?? 0) > 0 ? (stats.batting_h ?? 0) / stats.batting_ab : 0,
+                  'HR': stats.batting_hr ?? 0,
+                  'RBI': stats.batting_rbi ?? 0,
+                  'ERA': (parseFloat(stats.pitching_ip) || 0) > 0 ? (parseFloat(stats.pitching_er) * 9) / parseFloat(stats.pitching_ip) : null,
+                  'W': stats.pitching_w ?? 0,
+              };
 
-          // Add Pitcher ERA if available (using correct field name)
-          if (stats.pitching_era !== null && stats.pitching_era !== undefined) {
-             mlbPlayerPropsToUpsert.push({
-                player_name: playerName,
-                team: teamAbbr,
-                prop_type: 'Season ERA',
-                prop_value: stats.pitching_era,
-                analysis: `ERA: ${stats.pitching_era} in ${gamesPlayedOrPitched} games`,
-                confidence: 3, // Placeholder confidence
-             });
+              for (const [propType, propValue] of Object.entries(props)) {
+                  // Skip ERA for non-pitchers (ERA is null) or W for non-pitchers (W is 0)
+                  if ((propType === 'ERA' && propValue === null) || (propType === 'W' && propValue === 0 && (parseFloat(stats.pitching_ip) || 0) === 0)) {
+                      continue;
+                  }
+                  
+                  const uniqueKey = `${playerName}-${propType}`; // Key for uniqueness
+                  const propData = {
+                      player_name: playerName,
+                      team: teamAbbreviation,
+                      prop_type: propType,
+                      prop_value: propValue,
+                      analysis: `Season ${propType}: ${propValue?.toFixed ? propValue.toFixed(3) : propValue}`, // Basic analysis
+                      confidence: 3, // Placeholder confidence
+                  };
+                  finalMlbPlayerPropsMap.set(uniqueKey, propData); // Add/overwrite in Map
+              }
           }
-          // Add Batting Average if available (using correct field name)
-          if (stats.batting_avg !== null && stats.batting_avg !== undefined) {
-             mlbPlayerPropsToUpsert.push({
-                player_name: playerName,
-                team: teamAbbr,
-                prop_type: 'Season AVG',
-                prop_value: stats.batting_avg,
-                analysis: `AVG: ${stats.batting_avg} in ${gamesPlayed} games`,
-                confidence: 3, // Placeholder confidence
-             });
-          }
-           // Add Home Runs if available (using correct field name)
-          if (stats.batting_hr !== null && stats.batting_hr !== undefined) {
-             mlbPlayerPropsToUpsert.push({
-                player_name: playerName,
-                team: teamAbbr,
-                prop_type: 'Season HR',
-                prop_value: stats.batting_hr,
-                analysis: `${stats.batting_hr} HR in ${gamesPlayed} games`,
-                confidence: 3, // Placeholder confidence
-             });
-          }
-          // Add RBIs if available (using correct field name)
-          if (stats.batting_rbi !== null && stats.batting_rbi !== undefined) {
-             mlbPlayerPropsToUpsert.push({
-                player_name: playerName,
-                team: teamAbbr,
-                prop_type: 'Season RBI',
-                prop_value: stats.batting_rbi,
-                analysis: `${stats.batting_rbi} RBI in ${gamesPlayed} games`,
-                confidence: 3, // Placeholder confidence
-             });
-          }
-          // Add Pitcher Wins if available (using correct field name)
-          // Check games_pitched > 0 and safely access wins
-          if (gamesPitched > 0 && stats.pitching_w !== null && stats.pitching_w !== undefined) {
-             mlbPlayerPropsToUpsert.push({
-                player_name: playerName,
-                team: teamAbbr,
-                prop_type: 'Season Wins (Pitcher)',
-                prop_value: stats.pitching_w,
-                analysis: `${stats.pitching_w} Wins in ${gamesPitched} games pitched`,
-                confidence: 3, // Placeholder confidence
-             });
-          }
-        }
+          console.log("Finished MLB player prop processing loop.");
+      } else {
+          console.warn("No valid MLB player stats data found for prop processing.");
       }
+      
+      const mlbPlayerPropsToUpsert = Array.from(finalMlbPlayerPropsMap.values());
+      console.log(`Prepared ${mlbPlayerPropsToUpsert.length} unique MLB player props for upsert.`);
 
+      // 8. Upsert MLB Player Props
       if (mlbPlayerPropsToUpsert.length > 0) {
         console.log(`Upserting ${mlbPlayerPropsToUpsert.length} MLB player props...`);
-        // Upsert in chunks to avoid potential payload size limits
-        const chunkSize = 500;
-        for (let i = 0; i < mlbPlayerPropsToUpsert.length; i += chunkSize) {
-            const chunk = mlbPlayerPropsToUpsert.slice(i, i + chunkSize);
-            console.log(`Upserting MLB player props chunk ${i / chunkSize + 1}...`);
-            const { error: mlbPlayerUpsertError } = await supabase
-              .from("mlb_player_props")
-              .upsert(chunk, { onConflict: "player_name, prop_type" });
-            if (mlbPlayerUpsertError) throw mlbPlayerUpsertError;
-        }
+        const { error: mlbPlayerUpsertError } = await supabase
+          .from("mlb_player_props")
+          .upsert(mlbPlayerPropsToUpsert, { onConflict: "player_name, prop_type" });
+        if (mlbPlayerUpsertError) throw mlbPlayerUpsertError;
         console.log("Successfully upserted MLB player props.");
       } else {
         console.log("No MLB player props to upsert.");
@@ -489,157 +438,130 @@ serve(async (req) => {
     }
     console.log("--- Finished MLB Data Fetch ---");
 
-    // --- Fetch EPL Data ---
-    console.log("--- Starting EPL Data Fetch ---");
-    // Assuming EPL API follows a similar pattern, adjust base URL if needed
-    const eplBaseUrl = "https://api.balldontlie.io/epl/v1"; // Placeholder - Verify correct URL
+    // --- Fetch EPL Data (Placeholder) ---
+    console.log("--- Starting EPL Data Fetch (Placeholder) ---");
     try {
-      // 1. Fetch EPL Teams
-      const eplTeamsUrl = `${eplBaseUrl}/teams`;
-      const allEplTeams = await fetchAllPaginatedData(eplTeamsUrl, balldontlieApiKey);
-      console.log(`Fetched ${allEplTeams.length} EPL teams basic info.`);
-      const eplTeamMap = new Map(allEplTeams.map(team => [team.id, team]));
+        const eplBaseUrl = "https://api.balldontlie.io/epl/v1"; // Assuming similar structure
+        const eplSeason = 2024; // Using 2024 as requested
 
-      // 2. Fetch EPL Team Standings (Assuming endpoint exists and user has access)
-      // Using currentSeason (e.g., 2023) for consistency, adjust if needed
-      const eplStandingsUrl = `${eplBaseUrl}/team-standings?season=${currentSeason}`;
-      const allEplStandings = await fetchAllPaginatedData(eplStandingsUrl, balldontlieApiKey);
-      console.log(`Fetched ${allEplStandings.length} EPL team standings entries.`);
+        // 1. Fetch EPL Teams
+        const eplTeamsUrl = `${eplBaseUrl}/teams`;
+        const allEplTeams = await fetchAllPaginatedData(eplTeamsUrl, balldontlieApiKey);
+        console.log(`Fetched ${allEplTeams.length} EPL teams.`);
+        const eplTeamMap = new Map(allEplTeams.map(team => [team.abbreviation?.trim().toUpperCase(), team])); // Key by abbreviation
 
-      // 3. Process and Upsert EPL Team Stats
-      const eplTeamsToUpsert = [];
-      // Check if allEplStandings exists and is an array
-      if (allEplStandings && Array.isArray(allEplStandings)) {
-          for (const standing of allEplStandings) {
-            const teamInfo = eplTeamMap.get(standing.team_id);
-            // Safely access team info and properties
+        // 2. Fetch EPL Standings
+        const eplStandingsUrl = `${eplBaseUrl}/standings?season=${eplSeason}`;
+        const allEplStandings = await fetchAllPaginatedData(eplStandingsUrl, balldontlieApiKey);
+        console.log(`Fetched ${allEplStandings.length} EPL standings entries.`);
+        const eplStandingsMap = new Map();
+        allEplStandings.forEach(standing => {
+            const teamInfo = allEplTeams.find(t => t.id === standing.team_id);
+            const abbreviation = teamInfo?.abbreviation?.trim().toUpperCase();
+            if (abbreviation) {
+                eplStandingsMap.set(abbreviation, standing);
+            }
+        });
+        console.log(`Created EPL standings map with ${eplStandingsMap.size} entries.`);
+
+        // 3. Upsert EPL Team Stats (Using placeholder table names)
+        const eplTeamsToUpsert = [];
+        for (const teamAbbreviation of eplTeamMap.keys()) {
+            const teamInfo = eplTeamMap.get(teamAbbreviation);
+            const standing = eplStandingsMap.get(teamAbbreviation);
+            if (!teamInfo) continue;
             eplTeamsToUpsert.push({
-              team_name: teamInfo ? `${teamInfo.display_name ?? 'Unknown'} (${teamInfo.abbreviation ?? 'N/A'})` : `Unknown Team (${standing.team_id})`,
-              points: standing.points ?? 0,
-              goal_difference: standing.goal_difference ?? 0,
-              form: standing.form ?? 'N/A', // Assuming API provides 'form'
+                team_name: `${teamInfo.display_name ?? 'Unknown'} (${teamInfo.abbreviation ?? 'N/A'})`,
+                wins: standing?.wins ?? 0,
+                losses: standing?.losses ?? 0,
+                goals_for: standing?.goals_for ?? 0,
+                goals_against: standing?.goals_against ?? 0,
+                points: standing?.points ?? 0,
             });
-          }
-      } else {
-          console.warn("No valid EPL standings data found for processing.");
-      }
-
-      if (eplTeamsToUpsert.length > 0) {
-        console.log(`Upserting ${eplTeamsToUpsert.length} EPL teams stats...`);
-        // Use placeholder table name - user needs to confirm/create
-        const { error: eplTeamUpsertError } = await supabase
-          .from("epl_team_stats") 
-          .upsert(eplTeamsToUpsert, { onConflict: "team_name" });
-        if (eplTeamUpsertError) throw eplTeamUpsertError;
-        console.log("Successfully upserted EPL team stats.");
-      } else {
-        console.log("No EPL team stats to upsert.");
-      }
-
-      // 4. Fetch EPL Player Season Stats (Assuming endpoint exists and user has access)
-      const eplPlayerStatsUrl = `${eplBaseUrl}/player-season-stats?season=${currentSeason}`;
-      const allEplPlayerStats = await fetchAllPaginatedData(eplPlayerStatsUrl, balldontlieApiKey);
-      console.log(`Fetched ${allEplPlayerStats.length} EPL player season stats entries.`);
-
-      // 5. Process and Upsert EPL Player Props
-      const eplPlayerPropsToUpsert = [];
-      // Check if allEplPlayerStats exists and is an array
-      if (allEplPlayerStats && Array.isArray(allEplPlayerStats)) {
-        // console.log("Sample EPL Player Stat Data:", JSON.stringify(allEplPlayerStats[0], null, 2)); // Removed for brevity
-        for (const stats of allEplPlayerStats) {
-          // Defensive check: Ensure stats and stats.player exist before accessing properties
-          if (!stats || !stats.player) {
-            console.warn("Skipping EPL player stat record due to missing player data:", stats);
-            continue; // Skip this iteration if essential player data is missing
-          }
-          // Safely access player name parts using nullish coalescing
-          const playerName = `${stats.player.first_name ?? 'Unknown'} ${stats.player.last_name ?? 'Player'}`;
-          // Safely access team abbreviation using optional chaining and nullish coalescing
-          const teamAbbr = stats.team?.abbreviation ?? 'N/A'; // Assuming structure is similar to MLB
-          // Use nullish coalescing for games played
-          const gamesPlayed = stats.games_played ?? 0;
-
-          // Add Goals if available
-          if (stats.goals !== null && stats.goals !== undefined) {
-             eplPlayerPropsToUpsert.push({
-                player_name: playerName,
-                team: teamAbbr,
-                prop_type: 'Season Goals',
-                prop_value: stats.goals,
-                analysis: `${stats.goals} Goals in ${gamesPlayed} games`,
-                confidence: 3, // Placeholder confidence
-             });
-          }
-          // Add Assists if available
-          if (stats.assists !== null && stats.assists !== undefined) {
-             eplPlayerPropsToUpsert.push({
-                player_name: playerName,
-                team: teamAbbr,
-                prop_type: 'Season Assists',
-                prop_value: stats.assists,
-                analysis: `${stats.assists} Assists in ${gamesPlayed} games`,
-                confidence: 3, // Placeholder confidence
-             });
-          }
-          // Add Clean Sheets (Goalkeepers) if available
-          if (stats.clean_sheets !== null && stats.clean_sheets !== undefined) {
-             eplPlayerPropsToUpsert.push({
-                player_name: playerName,
-                team: teamAbbr,
-                prop_type: 'Season Clean Sheets',
-                prop_value: stats.clean_sheets,
-                analysis: `${stats.clean_sheets} Clean Sheets in ${gamesPlayed} games`,
-                confidence: 3, // Placeholder confidence
-             });
-          }
         }
-      } else {
-          console.warn("No valid EPL player stats data found for processing.");
-      }
-
-      if (eplPlayerPropsToUpsert.length > 0) {
-        console.log(`Upserting ${eplPlayerPropsToUpsert.length} EPL player props...`);
-        // Use placeholder table name - user needs to confirm/create
-        const chunkSize = 500;
-        for (let i = 0; i < eplPlayerPropsToUpsert.length; i += chunkSize) {
-            const chunk = eplPlayerPropsToUpsert.slice(i, i + chunkSize);
-            console.log(`Upserting EPL player props chunk ${i / chunkSize + 1}...`);
-            const { error: eplPlayerUpsertError } = await supabase
-              .from("epl_player_props") 
-              .upsert(chunk, { onConflict: "player_name, prop_type" });
-            if (eplPlayerUpsertError) throw eplPlayerUpsertError;
+        if (eplTeamsToUpsert.length > 0) {
+            console.log(`Upserting ${eplTeamsToUpsert.length} EPL teams to placeholder table...`);
+            const { error: eplTeamError } = await supabase
+                .from("epl_team_stats") // Placeholder table name
+                .upsert(eplTeamsToUpsert, { onConflict: "team_name" });
+            if (eplTeamError) throw eplTeamError;
+            console.log("Successfully upserted EPL team data (placeholder)." );
+        } else {
+            console.log("No EPL team data to upsert.");
         }
-        console.log("Successfully upserted EPL player props.");
-      } else {
-        console.log("No EPL player props to upsert.");
-      }
+
+        // 4. Fetch EPL Player Stats
+        const eplPlayerStatsUrl = `${eplBaseUrl}/season_stats?season=${eplSeason}`;
+        const allEplPlayerStats = await fetchAllPaginatedData(eplPlayerStatsUrl, balldontlieApiKey);
+        console.log(`Fetched ${allEplPlayerStats.length} EPL player season stats entries.`);
+
+        // 5. Process and Upsert EPL Player Props (Using placeholder table names)
+        const finalEplPlayerPropsMap = new Map();
+        if (allEplPlayerStats && Array.isArray(allEplPlayerStats)) {
+            for (const stats of allEplPlayerStats) {
+                const player = stats.player;
+                if (!player) continue;
+                const playerName = `${player.first_name ?? 'Unknown'} ${player.last_name ?? 'Player'}`.trim();
+                const teamAbbreviation = player.team?.abbreviation?.trim().toUpperCase() ?? 'N/A';
+                
+                // Example props (adjust based on actual API response)
+                const props = {
+                    'Goals': stats.goals ?? 0,
+                    'Assists': stats.assists ?? 0,
+                    'YellowCards': stats.yellow_cards ?? 0,
+                };
+
+                for (const [propType, propValue] of Object.entries(props)) {
+                     if (propValue === 0) continue; // Optional: skip zero values
+                     const uniqueKey = `${playerName}-${propType}`;
+                     const propData = {
+                         player_name: playerName,
+                         team: teamAbbreviation,
+                         prop_type: propType,
+                         prop_value: propValue,
+                         analysis: `Season ${propType}: ${propValue}`,
+                         confidence: 3,
+                     };
+                     finalEplPlayerPropsMap.set(uniqueKey, propData);
+                }
+            }
+        }
+        const eplPlayerPropsToUpsert = Array.from(finalEplPlayerPropsMap.values());
+        if (eplPlayerPropsToUpsert.length > 0) {
+            console.log(`Upserting ${eplPlayerPropsToUpsert.length} EPL player props to placeholder table...`);
+            const { error: eplPlayerError } = await supabase
+                .from("epl_player_props") // Placeholder table name
+                .upsert(eplPlayerPropsToUpsert, { onConflict: "player_name, prop_type" });
+            if (eplPlayerError) throw eplPlayerError;
+            console.log("Successfully upserted EPL player props (placeholder).");
+        } else {
+            console.log("No EPL player props to upsert.");
+        }
 
     } catch (eplError) {
-      console.error("EPL data fetch/process error:", eplError.message);
-      // Don't throw error, just log it, so other sports can continue
+        // Log specific EPL errors but don't stop the whole function
+        console.error("EPL data fetch/process error (Placeholder):", eplError.message);
+        // Check if it's a 404 or similar indicating the endpoint might not exist
+        if (eplError.message.includes("404")) {
+            console.warn("EPL endpoints might not be available or require different parameters.");
+        }
     }
-    console.log("--- Finished EPL Data Fetch ---");
+    console.log("--- Finished EPL Data Fetch (Placeholder) ---");
 
-    // --- TODO: Generate and store Predictions ---
-    console.log("--- Generating Predictions (TODO) ---");
-
-    // --- TODO: Generate and store Bets of the Day ---
-    console.log("--- Generating Bets of the Day (TODO) ---");
-
-    // Return success response including all sports attempted
-    return new Response(JSON.stringify({ message: "Sports data update process completed for NBA, NHL, MLB, and EPL (placeholder)." }), {
+    // --- Function Completion ---
+    console.log("Function execution completed successfully.");
+    return new Response(JSON.stringify({ message: "Data update process completed." }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
 
   } catch (error) {
-    console.error("Function error:", error.message, error.stack);
+    // --- Error Handling ---
+    console.error("Unhandled error in function:", error);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
     });
   }
 });
-
-console.log("update-sports-data function handler registered.");
 
