@@ -290,7 +290,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({ message: "Sports data update process completed for NBA & NHL (partially)." }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
-    });
+    });;
 
   } catch (error) {
     console.error("Function error:", error.message, error.stack);
