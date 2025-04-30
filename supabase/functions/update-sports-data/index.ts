@@ -272,109 +272,10 @@ serve(async (req) => {
     
     console.log("--- Finished NHL Data Fetch ---");
 
-    // --- Fetch MLB Data ---
-    console.log("--- Starting MLB Data Fetch ---");
-    
-    try {
-      // 1. Fetch MLB Teams (Basic Info)
-      // Assuming endpoint structure similar to NBA
-      const mlbTeamsUrl = "https://api.balldontlie.io/v1/mlb/teams"; 
-      const allMlbTeams = await fetchAllPaginatedData(mlbTeamsUrl, balldontlieApiKey);
-      console.log(`Fetched ${allMlbTeams.length} MLB teams basic info.`);
-      
-      // 2. Fetch MLB Team Stats (Standings, ERA, Batting Avg)
-      // TODO: Find the correct endpoint for MLB team stats (ERA, batting avg, etc.)
-      // Placeholder: Using random data for now
-      const mlbTeamStatsMap = new Map();
-      allMlbTeams.forEach(team => {
-        mlbTeamStatsMap.set(team.id, {
-          era: (Math.random() * 3 + 2.5).toFixed(2), // Random ERA between 2.50 and 5.50
-          batting_average: (Math.random() * 0.05 + 0.230).toFixed(3), // Random AVG between .230 and .280
-          recent_form: "W-L-W-W-L" // Placeholder
-        });
-      });
-      console.log("Placeholder: Need to implement actual MLB team stats fetch.");
-      
-      // 3. Upsert MLB Team Stats
-      const mlbTeamsToUpsert = allMlbTeams.map((team: any) => {
-        const stats = mlbTeamStatsMap.get(team.id) || {};
-        return {
-          team_name: `${team.full_name} (${team.abbreviation})`, 
-          era: stats.era || 4.00,
-          batting_average: stats.batting_average || 0.250,
-          recent_form: stats.recent_form || "N/A",
-        };
-      });
-      
-      if (mlbTeamsToUpsert.length > 0) {
-        console.log(`Upserting ${mlbTeamsToUpsert.length} MLB teams...`);
-        // Ensure UNIQUE constraint exists on team_name in mlb_team_stats table
-        const { error: mlbTeamUpsertError } = await supabase
-          .from("mlb_team_stats")
-          .upsert(mlbTeamsToUpsert, { onConflict: "team_name" }); 
-        if (mlbTeamUpsertError) throw mlbTeamUpsertError;
-        console.log("Successfully upserted MLB team data.");
-      } else {
-        console.log("No MLB team data to upsert.");
-      }
-      
-      // 4. Fetch MLB Player Stats (Pitcher ERA, Batter Stats)
-      // TODO: Find the correct endpoint for MLB player stats (pitcher ERA, batter HR/AVG, etc.)
-      // Placeholder: Fetching NBA player averages again as a placeholder structure
-      const mlbPlayerStatsUrl = `https://api.balldontlie.io/v1/mlb/season_averages/general?season=${currentSeason}&season_type=regular&type=base`;
-      const allMlbPlayerStats = await fetchAllPaginatedData(mlbPlayerStatsUrl, balldontlieApiKey);
-      console.log(`Fetched ${allMlbPlayerStats.length} MLB player stats examples (using placeholder endpoint).`);
-      console.log("Placeholder: Need to implement actual MLB player stats fetch.");
-      
-      // 5. Process and Upsert MLB Player Props
-      const mlbPlayerPropsToUpsert = [];
-      if (allMlbPlayerStats.length > 0) {
-        // Example processing (adapt based on actual MLB stats structure)
-        allMlbPlayerStats.slice(0, 50).forEach((avg: any) => { // Limit processing for example
-          // Example Pitcher Prop (ERA)
-          if (avg.stats?.era) { // Check if ERA exists (placeholder)
-             mlbPlayerPropsToUpsert.push({
-                player_name: `${avg.player.first_name} ${avg.player.last_name} (P)`, 
-                team: avg.player.team?.abbreviation || 'N/A',
-                prop_type: 'Season ERA',
-                prop_value: avg.stats.era,
-                analysis: `ERA: ${avg.stats.era} in ${avg.stats.games_pitched || 0} games.`, 
-                confidence: 3, // Placeholder
-             });
-          }
-          // Example Batter Prop (Home Runs)
-          if (avg.stats?.hr) { // Check if HR exists (placeholder)
-             mlbPlayerPropsToUpsert.push({
-                player_name: `${avg.player.first_name} ${avg.player.last_name} (B)`, 
-                team: avg.player.team?.abbreviation || 'N/A',
-                prop_type: 'Season HR',
-                prop_value: avg.stats.hr,
-                analysis: `${avg.stats.hr} HR in ${avg.stats.games_played || 0} games.`, 
-                confidence: 3, // Placeholder
-             });
-          }
-        });
-      }
-      
-      // 6. Upsert MLB Player Props
-      if (mlbPlayerPropsToUpsert.length > 0) {
-        console.log(`Upserting ${mlbPlayerPropsToUpsert.length} MLB player props...`);
-        // Ensure UNIQUE constraint exists on player_name, prop_type in mlb_player_props table
-        const { error: mlbPlayerUpsertError } = await supabase
-          .from("mlb_player_props")
-          .upsert(mlbPlayerPropsToUpsert, { onConflict: "player_name, prop_type" });
-        if (mlbPlayerUpsertError) throw mlbPlayerUpsertError;
-        console.log("Successfully upserted MLB player props.");
-      } else {
-        console.log("No MLB player props to upsert.");
-      }
-      
-    } catch (mlbError) {
-      console.error("MLB data fetch error:", mlbError.message);
-      // Continue with other processes even if MLB fails
-    }
-    
-    console.log("--- Finished MLB Data Fetch ---");
+    // --- MLB Data Fetch Removed ---
+    // console.log("--- Starting MLB Data Fetch ---");
+    // Removed MLB section as balldontlie.io API does not support MLB data (returned 404).
+    // console.log("--- Finished MLB Data Fetch ---");
 
     // --- TODO: Generate and store Predictions ---
     console.log("--- Generating Predictions (TODO) ---");
@@ -385,7 +286,7 @@ serve(async (req) => {
     // Implement logic to select top bets
 
     // Return success response
-    return new Response(JSON.stringify({ message: "Sports data update process completed for NBA, NHL, MLB (partially)." }), {
+    return new Response(JSON.stringify({ message: "Sports data update process completed for NBA & NHL (partially)." }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
