@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 
-console.log("Initializing update-sports-data function (v33 EPL Player Stats Diagnostic)");
+console.log("Initializing update-sports-data function (v34 EPL Teams Fetch Attempt)");
 
 // --- Helper Function to fetch paginated data ---
 async function fetchAllPaginatedData(url: string, apiKey: string) {
@@ -313,17 +313,17 @@ serve(async (req) => {
     } catch (mlbError) { console.error("MLB data fetch/process error:", mlbError.message); }
     console.log("--- Finished MLB Data Fetch ---");
 
-    // --- Fetch EPL Data (v33 Player Stats Diagnostic) ---
-    console.log("--- Starting EPL Data Fetch (v33 Player Stats Diagnostic) ---");
+    // --- Fetch EPL Data (v34 Attempt) ---
+    console.log("--- Starting EPL Data Fetch (v34 Attempt) ---");
     const eplBaseUrl = "https://api.balldontlie.io/epl/v1"; 
     let allEplTeams = [];
     let allEplStandings = [];
     let allEplPlayerStats = [];
 
     try {
-        // Fetch EPL Teams (Reverted to fetchAllPaginatedData, assuming no params needed based on v32 logs)
+        // Fetch EPL Teams (Attempting without season param, using fetchAllPaginatedData)
         const eplTeamsUrl = `${eplBaseUrl}/teams`;
-        console.log(`Attempting to fetch EPL teams from: ${eplTeamsUrl}`);
+        console.log(`Attempting to fetch EPL teams from: ${eplTeamsUrl} (using fetchAllPaginatedData)`);
         allEplTeams = await fetchAllPaginatedData(eplTeamsUrl, balldontlieApiKey);
         console.log(`Fetched ${allEplTeams.length} EPL teams.`);
 
@@ -357,7 +357,7 @@ serve(async (req) => {
         });
         console.log(`Created EPL standings map with ${eplStandingsMap.size} entries.`);
 
-        // Upsert EPL Team Stats (Placeholder)
+        // Upsert EPL Team Stats (Using confirmed table name)
         const eplTeamsToUpsert = [];
         for (const teamAbbreviation of eplTeamMap.keys()) {
             const teamInfo = eplTeamMap.get(teamAbbreviation);
@@ -365,49 +365,34 @@ serve(async (req) => {
             if (!teamInfo) continue;
             eplTeamsToUpsert.push({
                 team_name: `${teamInfo.name ?? 'Unknown'} (${teamInfo.abbr ?? 'N/A'})`, 
-                wins: standing?.wins ?? 0, losses: standing?.losses ?? 0,
-                goals_for: standing?.goals_for ?? 0, goals_against: standing?.goals_against ?? 0,
+                wins: standing?.wins ?? 0, 
+                losses: standing?.losses ?? 0,
+                goals_for: standing?.goals_for ?? 0, 
+                goals_against: standing?.goals_against ?? 0,
                 points: standing?.points ?? 0,
             });
         }
         if (eplTeamsToUpsert.length > 0) {
-            console.log(`Upserting ${eplTeamsToUpsert.length} EPL teams to placeholder table...`);
+            console.log(`Upserting ${eplTeamsToUpsert.length} EPL teams to epl_team_stats table...`);
             const { error: eplTeamError } = await supabase
-                .from("epl_team_stats") // Placeholder table name
+                .from("epl_team_stats") // Confirmed table name
                 .upsert(eplTeamsToUpsert, { onConflict: "team_name" });
             if (eplTeamError) throw eplTeamError;
-            console.log("Successfully upserted EPL team data (placeholder)." );
+            console.log("Successfully upserted EPL team data." );
         } else {
             console.log("No EPL team data to upsert.");
         }
 
-        // --- [v33] Isolate EPL Player Stats Fetch ---
-        let eplPlayerStatsUrl = '';
-        try {
-            // Log components before constructing URL
-            console.log(`[v33 DIAGNOSTIC] Constructing EPL Player Stats URL. Base: ${eplBaseUrl}, Season: ${eplSeason}`);
-            eplPlayerStatsUrl = `${eplBaseUrl}/season_stats?season=${eplSeason}`;
-            console.log(`[v33 DIAGNOSTIC] Attempting to fetch EPL player stats from: ${eplPlayerStatsUrl}`);
-            
-            if (typeof eplPlayerStatsUrl !== 'string' || !eplPlayerStatsUrl) {
-                 throw new Error(`Invalid EPL Player Stats URL generated: ${eplPlayerStatsUrl}`);
-            }
-            
-            // Isolate the fetch call
-            allEplPlayerStats = await fetchAllPaginatedData(eplPlayerStatsUrl, balldontlieApiKey);
-            console.log(`[v33 DIAGNOSTIC] Successfully fetched ${allEplPlayerStats.length} EPL player season stats entries.`);
-
-        } catch (playerStatsError) {
-            console.error(`[v33 DIAGNOSTIC] Error specifically during EPL player stats fetch from ${eplPlayerStatsUrl}:`, playerStatsError.message);
-            console.error("[v33 DIAGNOSTIC] Full Player Stats Fetch Error Object:", JSON.stringify(playerStatsError, null, 2));
-            // Decide if we should re-throw or just log and continue without player stats
-            // For now, let's log and continue to see if the rest works
-            console.warn("[v33 DIAGNOSTIC] Proceeding without EPL player stats due to fetch error.");
-            allEplPlayerStats = []; // Ensure it's an empty array if fetch failed
+        // Fetch EPL Player Stats
+        const eplPlayerStatsUrl = `${eplBaseUrl}/season_stats?season=${eplSeason}`;
+        console.log(`Attempting to fetch EPL player stats from: ${eplPlayerStatsUrl}`);
+        if (typeof eplPlayerStatsUrl !== 'string' || !eplPlayerStatsUrl) {
+             throw new Error(`Invalid EPL Player Stats URL generated: ${eplPlayerStatsUrl}`);
         }
-        // --- End [v33] Isolation ---
+        allEplPlayerStats = await fetchAllPaginatedData(eplPlayerStatsUrl, balldontlieApiKey);
+        console.log(`Fetched ${allEplPlayerStats.length} EPL player season stats entries.`);
 
-        // Process and Upsert EPL Player Props (Placeholder)
+        // Process and Upsert EPL Player Props (Using confirmed table name)
         const finalEplPlayerPropsMap = new Map();
         if (allEplPlayerStats && Array.isArray(allEplPlayerStats)) {
             for (const stats of allEplPlayerStats) {
@@ -423,11 +408,15 @@ serve(async (req) => {
                 };
 
                 for (const [propType, propValue] of Object.entries(props)) {
-                     if (propValue === 0) continue; 
+                     if (propValue === 0 && propType !== 'Goals') continue; // Only include zero value for Goals maybe?
                      const uniqueKey = `${playerName}-${propType}`;
                      const propData = {
-                         player_name: playerName, team: teamAbbreviation, prop_type: propType, prop_value: propValue,
-                         analysis: `Season ${propType}: ${propValue}`, confidence: 3
+                         player_name: playerName, 
+                         team: teamAbbreviation, 
+                         prop_type: propType, 
+                         prop_value: propValue,
+                         analysis: `Season ${propType}: ${propValue}`, 
+                         confidence: 3
                      };
                      finalEplPlayerPropsMap.set(uniqueKey, propData);
                 }
@@ -435,25 +424,26 @@ serve(async (req) => {
         }
         const eplPlayerPropsToUpsert = Array.from(finalEplPlayerPropsMap.values());
         if (eplPlayerPropsToUpsert.length > 0) {
-            console.log(`Upserting ${eplPlayerPropsToUpsert.length} EPL player props to placeholder table...`);
+            console.log(`Upserting ${eplPlayerPropsToUpsert.length} EPL player props to epl_player_props table...`);
             const { error: eplPlayerError } = await supabase
-                .from("epl_player_props") // Placeholder table name
+                .from("epl_player_props") // Confirmed table name
                 .upsert(eplPlayerPropsToUpsert, { onConflict: "player_name, prop_type" });
             if (eplPlayerError) throw eplPlayerError;
-            console.log("Successfully upserted EPL player props (placeholder).");
+            console.log("Successfully upserted EPL player props.");
         } else {
             console.log("No EPL player props to upsert.");
         }
 
     } catch (eplError) {
-        // This catch block now primarily handles errors from teams/standings fetch or upserts
-        console.error("EPL data fetch/process error (Placeholder - Outer Block):", eplError.message);
-        console.error("Full EPL Error Object (Outer Block):", JSON.stringify(eplError, null, 2)); 
-        if (eplError.message.includes("404")) {
-            console.warn("EPL endpoints might not be available or require different parameters.");
+        console.error("EPL data fetch/process error:", eplError.message);
+        console.error("Full EPL Error Object:", JSON.stringify(eplError, null, 2)); 
+        if (eplError.message.includes("400") && eplError.message.includes("/teams")) {
+            console.warn("Fetching /epl/v1/teams failed. This endpoint might not support pagination or requires different parameters.");
+        } else if (eplError.message.includes("404")) {
+            console.warn("One or more EPL endpoints might not be available or require different parameters.");
         }
     } 
-    console.log("--- Finished EPL Data Fetch (Placeholder) ---");
+    console.log("--- Finished EPL Data Fetch ---");
 
     // --- Function Completion ---
     console.log("Function execution completed successfully.");
