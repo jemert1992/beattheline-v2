@@ -261,7 +261,7 @@ serve(async (req) => {
 
       // 2. Fetch MLB Team Season Stats (Requires GOAT tier - user has ALL-ACCESS)
       // Using currentSeason (e.g., 2023) for consistency, adjust if needed
-      const mlbTeamStatsUrl = `${mlbBaseUrl}/team-season-stats?season=${currentSeason}`;
+      const mlbTeamStatsUrl = `${mlbBaseUrl}/team-standings?season=${currentSeason}`;
       const allMlbTeamStats = await fetchAllPaginatedData(mlbTeamStatsUrl, balldontlieApiKey);
       console.log(`Fetched ${allMlbTeamStats.length} MLB team season stats entries.`);
 
@@ -288,7 +288,7 @@ serve(async (req) => {
       }
 
       // 4. Fetch MLB Player Season Stats (Requires GOAT tier)
-      const mlbPlayerStatsUrl = `${mlbBaseUrl}/player-season-stats?season=${currentSeason}`;
+      const mlbPlayerStatsUrl = `${mlbBaseUrl}/season-stats?season=${currentSeason}`;
       const allMlbPlayerStats = await fetchAllPaginatedData(mlbPlayerStatsUrl, balldontlieApiKey);
       console.log(`Fetched ${allMlbPlayerStats.length} MLB player season stats entries.`);
 
