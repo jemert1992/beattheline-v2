@@ -277,3 +277,135 @@ serve(async (req) => {
 
 console.log("update-sports-data function handler registered.");
 
+
+
+    // --- Fetch MLB Data ---
+    console.log("--- Starting MLB Data Fetch ---");
+    const mlbBaseUrl = "https://mlb.balldontlie.io/mlb/v1";
+    try {
+      // 1. Fetch MLB Teams
+      const mlbTeamsUrl = `${mlbBaseUrl}/teams`;
+      const allMlbTeams = await fetchAllPaginatedData(mlbTeamsUrl, balldontlieApiKey);
+      console.log(`Fetched ${allMlbTeams.length} MLB teams basic info.`);
+      const mlbTeamMap = new Map(allMlbTeams.map(team => [team.id, team]));
+
+      // 2. Fetch MLB Team Season Stats (Requires GOAT tier - user has ALL-ACCESS)
+      // Using currentSeason (e.g., 2023) for consistency, adjust if needed
+      const mlbTeamStatsUrl = `${mlbBaseUrl}/team-season-stats?season=${currentSeason}`;
+      const allMlbTeamStats = await fetchAllPaginatedData(mlbTeamStatsUrl, balldontlieApiKey);
+      console.log(`Fetched ${allMlbTeamStats.length} MLB team season stats entries.`);
+
+      // 3. Process and Upsert MLB Team Stats
+      const mlbTeamsToUpsert = allMlbTeamStats.map((stats: any) => {
+        const teamInfo = mlbTeamMap.get(stats.team_id);
+        return {
+          team_name: teamInfo ? `${teamInfo.display_name} (${teamInfo.abbreviation})` : `Unknown Team (${stats.team_id})`,
+          win_loss_record: `${stats.wins || 0}-${stats.losses || 0}`,
+          era: stats.era || null, // Assuming API provides 'era'
+          batting_average: stats.avg || null, // Assuming API provides 'avg' for batting average
+        };
+      });
+
+      if (mlbTeamsToUpsert.length > 0) {
+        console.log(`Upserting ${mlbTeamsToUpsert.length} MLB teams stats...`);
+        const { error: mlbTeamUpsertError } = await supabase
+          .from("mlb_team_stats")
+          .upsert(mlbTeamsToUpsert, { onConflict: "team_name" });
+        if (mlbTeamUpsertError) throw mlbTeamUpsertError;
+        console.log("Successfully upserted MLB team stats.");
+      } else {
+        console.log("No MLB team stats to upsert.");
+      }
+
+      // 4. Fetch MLB Player Season Stats (Requires GOAT tier)
+      const mlbPlayerStatsUrl = `${mlbBaseUrl}/player-season-stats?season=${currentSeason}`;
+      const allMlbPlayerStats = await fetchAllPaginatedData(mlbPlayerStatsUrl, balldontlieApiKey);
+      console.log(`Fetched ${allMlbPlayerStats.length} MLB player season stats entries.`);
+
+      // 5. Process and Upsert MLB Player Props
+      const mlbPlayerPropsToUpsert = [];
+      if (allMlbPlayerStats.length > 0) {
+        console.log("Sample MLB Player Stat Data:", JSON.stringify(allMlbPlayerStats[0], null, 2));
+        for (const stats of allMlbPlayerStats) {
+          const playerName = `${stats.player.first_name} ${stats.player.last_name}`;
+          const teamAbbr = stats.team.abbreviation || 'N/A';
+          // Add Pitcher ERA if available
+          if (stats.era !== null && stats.era !== undefined) {
+             mlbPlayerPropsToUpsert.push({
+                player_name: playerName,
+                team: teamAbbr,
+                prop_type: 'Season ERA',
+                prop_value: stats.era,
+                analysis: `ERA: ${stats.era} in ${stats.games_pitched || stats.games_played || 0} games`,
+                confidence: 3, // Placeholder confidence
+             });
+          }
+          // Add Batting Average if available
+          if (stats.avg !== null && stats.avg !== undefined) {
+             mlbPlayerPropsToUpsert.push({
+                player_name: playerName,
+                team: teamAbbr,
+                prop_type: 'Season AVG',
+                prop_value: stats.avg,
+                analysis: `AVG: ${stats.avg} in ${stats.games_played || 0} games`,
+                confidence: 3, // Placeholder confidence
+             });
+          }
+           // Add Home Runs if available
+          if (stats.hr !== null && stats.hr !== undefined) {
+             mlbPlayerPropsToUpsert.push({
+                player_name: playerName,
+                team: teamAbbr,
+                prop_type: 'Season HR',
+                prop_value: stats.hr,
+                analysis: `${stats.hr} HR in ${stats.games_played || 0} games`,
+                confidence: 3, // Placeholder confidence
+             });
+          }
+          // Add RBIs if available
+          if (stats.rbi !== null && stats.rbi !== undefined) {
+             mlbPlayerPropsToUpsert.push({
+                player_name: playerName,
+                team: teamAbbr,
+                prop_type: 'Season RBI',
+                prop_value: stats.rbi,
+                analysis: `${stats.rbi} RBI in ${stats.games_played || 0} games`,
+                confidence: 3, // Placeholder confidence
+             });
+          }
+          // Add Pitcher Wins if available
+          if (stats.wins !== null && stats.wins !== undefined && stats.games_pitched > 0) { // Check games_pitched to ensure it's a pitcher stat
+             mlbPlayerPropsToUpsert.push({
+                player_name: playerName,
+                team: teamAbbr,
+                prop_type: 'Season Wins (Pitcher)',
+                prop_value: stats.wins,
+                analysis: `${stats.wins} Wins in ${stats.games_pitched || 0} games pitched`,
+                confidence: 3, // Placeholder confidence
+             });
+          }
+        }
+      }
+
+      if (mlbPlayerPropsToUpsert.length > 0) {
+        console.log(`Upserting ${mlbPlayerPropsToUpsert.length} MLB player props...`);
+        // Upsert in chunks to avoid potential payload size limits
+        const chunkSize = 500;
+        for (let i = 0; i < mlbPlayerPropsToUpsert.length; i += chunkSize) {
+            const chunk = mlbPlayerPropsToUpsert.slice(i, i + chunkSize);
+            console.log(`Upserting MLB player props chunk ${i / chunkSize + 1}...`);
+            const { error: mlbPlayerUpsertError } = await supabase
+              .from("mlb_player_props")
+              .upsert(chunk, { onConflict: "player_name, prop_type" });
+            if (mlbPlayerUpsertError) throw mlbPlayerUpsertError;
+        }
+        console.log("Successfully upserted MLB player props.");
+      } else {
+        console.log("No MLB player props to upsert.");
+      }
+
+    } catch (mlbError) {
+      console.error("MLB data fetch error:", mlbError.message);
+    }
+    console.log("--- Finished MLB Data Fetch ---");
+
