@@ -172,13 +172,14 @@ serve(async (req) => {
       return await response.json();
     }
     
-    try {
+      // Define the NHL season to fetch (e.g., most recent completed season)
+      const nhlSeason = "2023-2024"; // Adjust if needed
       // 1. Fetch NHL Standings for team records
       const nhlStandings = await fetchNhlData('/v1/standings/now');
       console.log(`Fetched NHL standings with ${nhlStandings.standings?.length || 0} teams.`);
       
       // 2. Fetch NHL Goalie Stats Leaders
-      const nhlGoalieStats = await fetchNhlData('/v1/goalie-stats-leaders/current');
+      const nhlGoalieStats = await fetchNhlData(`/v1/goalie-stats-leaders/${nhlSeason}`);
       console.log(`Fetched NHL goalie stats with ${nhlGoalieStats.goalieStatLeaders?.length || 0} categories.`);
       
       // 3. Process and map NHL team data for upsert
@@ -230,7 +231,7 @@ serve(async (req) => {
       const nhlPlayerPropsToUpsert = [];
       
       // Fetch skater stats for points, goals, etc.
-      const nhlSkaterStats = await fetchNhlData('/v1/skater-stats-leaders/current?categories=points,goals,assists&limit=50');
+      const nhlSkaterStats = await fetchNhlData(`/v1/skater-stats-leaders/${nhlSeason}?categories=points,goals,assists&limit=50`);
       console.log(`Fetched NHL skater stats with ${nhlSkaterStats.categories?.length || 0} categories.`);
       
       if (nhlSkaterStats.categories && nhlSkaterStats.categories.length > 0) {
