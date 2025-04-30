@@ -64,8 +64,7 @@ serve(async (req) => {
     const balldontlieApiKey = "9047df76-eb37-4f81-8586-f7ae336027dc"; // Use the provided API key
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const currentSeason = 2023; // Use 2023 for NBA/MLB
-    const eplSeason = 2024; // Use 2024 for EPL based on API errors
+    const currentSeason = 2023; // Use 2023 for NBA/MLB/EPL as per docs/errors
 
     if (!supabaseUrl || !supabaseServiceRoleKey) {
       throw new Error("Supabase environment variables not set.");
@@ -260,74 +259,20 @@ serve(async (req) => {
       console.log(`Fetched ${allMlbTeams.length} MLB teams basic info.`);
       const mlbTeamMap = new Map(allMlbTeams.map(team => [team.id, team]));
 
-      // 2. Fetch MLB Player Season Stats (for aggregation)
-      const mlbPlayerStatsUrl = `${mlbBaseUrl}/season-stats?season=${currentSeason}`;
-      const allMlbPlayerStats = await fetchAllPaginatedData(mlbPlayerStatsUrl, balldontlieApiKey);
-      console.log(`Fetched ${allMlbPlayerStats.length} MLB player season stats entries.`);
-
-      // 3. Aggregate Player Stats to Calculate Team ERA and AVG
-      const mlbTeamAggregatedStats = new Map();
-
-      function parseInningsPitched(ipString: string | null | undefined): number {
-        if (!ipString) return 0;
-        const parts = ipString.split(".");
-        const fullInnings = parseInt(parts[0] || "0", 10);
-        const partialInnings = parseInt(parts[1] || "0", 10);
-        return fullInnings + (partialInnings / 3);
-      }
-
-      for (const stats of allMlbPlayerStats) {
-        const teamId = stats.team?.id;
-        if (!teamId) continue;
-
-        if (!mlbTeamAggregatedStats.has(teamId)) {
-          mlbTeamAggregatedStats.set(teamId, {
-            hits: 0,
-            at_bats: 0,
-            earned_runs: 0,
-            innings_pitched: 0.0,
-          });
-        }
-
-        const teamStats = mlbTeamAggregatedStats.get(teamId);
-        teamStats.hits += Number(stats.hits || 0);
-        teamStats.at_bats += Number(stats.at_bats || 0);
-        teamStats.earned_runs += Number(stats.earned_runs || 0);
-        teamStats.innings_pitched += parseInningsPitched(stats.innings_pitched);
-      }
-
-      // Calculate final ERA and AVG
-      for (const [teamId, stats] of mlbTeamAggregatedStats.entries()) {
-        stats.avg = stats.at_bats > 0 ? (stats.hits / stats.at_bats) : 0;
-        stats.era = stats.innings_pitched > 0 ? ((stats.earned_runs / stats.innings_pitched) * 9) : null; // Use null for ERA if no innings pitched
-      }
-      console.log(`Aggregated stats for ${mlbTeamAggregatedStats.size} MLB teams.`);
-
-      // 4. Fetch MLB Team Standings (Requires ALL-STAR tier)
+      // 2. Fetch MLB Team Standings (Requires ALL-STAR tier)
       const mlbStandingsUrl = `${mlbBaseUrl}/standings?season=2023`; // Use 2023 season
       const allMlbStandings = await fetchAllPaginatedData(mlbStandingsUrl, balldontlieApiKey);
       console.log(`Fetched ${allMlbStandings.length} MLB team standings entries.`);
 
-      // 5. Process and Upsert MLB Team Stats (Combining Standings and Aggregated Stats)
-      const processedMlbTeams = allMlbStandings.map((standing: any) => {
+      // 3. Process and Upsert MLB Team Stats from Standings
+      const mlbTeamsToUpsert = allMlbStandings.map((standing: any) => {
         const teamInfo = mlbTeamMap.get(standing.team_id);
-        const aggregated = mlbTeamAggregatedStats.get(standing.team_id);
         return {
           team_name: teamInfo ? `${teamInfo.display_name} (${teamInfo.abbreviation})` : `Unknown Team (${standing.team_id})`,
-          win_loss_record: `${standing.wins || 0}-${standing.losses || 0}`,
-          era: aggregated ? aggregated.era : null,
-          batting_average: aggregated ? aggregated.avg : null,
+          win_loss_record: `${standing.wins || 0}-${standing.losses || 0}`
+          // Removed era and batting_average as they are not in standings data and caused schema error
         };
       });
-
-      // Filter out duplicates based on team_name before upserting
-      const uniqueMlbTeamsMap = new Map();
-      processedMlbTeams.forEach(team => {
-        if (!uniqueMlbTeamsMap.has(team.team_name)) {
-          uniqueMlbTeamsMap.set(team.team_name, team);
-        }
-      });
-      const mlbTeamsToUpsert = Array.from(uniqueMlbTeamsMap.values());
 
       if (mlbTeamsToUpsert.length > 0) {
         console.log(`Upserting ${mlbTeamsToUpsert.length} MLB teams stats...`);
